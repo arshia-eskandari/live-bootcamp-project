@@ -52,9 +52,6 @@ impl Application {
     }
 }
 
-async fn signup() -> impl IntoResponse {
-    StatusCode::OK.into_response()
-}
 async fn login() -> impl IntoResponse {
     StatusCode::OK.into_response()
 }
