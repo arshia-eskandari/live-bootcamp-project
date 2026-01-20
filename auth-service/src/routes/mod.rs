@@ -10,6 +10,7 @@ pub use signup::*;
 pub use verify_2fa::*;
 pub use verify_token::*;
 
+use crate::AppState;
 use axum::{response::IntoResponse, routing::post, serve::Serve, Router};
 use reqwest::StatusCode;
 use std::error::Error;
@@ -25,7 +26,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn build(address: &str) -> Result<Self, Box<dyn Error>> {
+    pub async fn build(app_state: AppState, address: &str) -> Result<Self, Box<dyn Error>> {
         // Move the Router definition from `main.rs` to here.
         // Also, remove the `hello` route.
         // We don't need it at this point!
@@ -36,7 +37,8 @@ impl Application {
             .route("/login", post(login))
             .route("/logout", post(logout))
             .route("/verify-2fa", post(verify_2fa))
-            .route("/verify-token", post(verify_token));
+            .route("/verify-token", post(verify_token))
+            .with_state(app_state);
 
         let listener = tokio::net::TcpListener::bind(address).await?;
         let address = listener.local_addr()?.to_string();
