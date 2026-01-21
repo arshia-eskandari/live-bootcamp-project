@@ -1,14 +1,6 @@
 use std::collections::HashMap;
 
-use crate::domain::User;
-
-#[derive(Debug, PartialEq)]
-pub enum UserStoreError {
-    UserAlreadyExists,
-    UserNotFound,
-    InvalidCredentials,
-    UnexpectedError,
-}
+use crate::domain::{User, UserStore, UserStoreError};
 
 pub struct HashmapUserStore {
     users: HashMap<String, User>,
@@ -26,8 +18,11 @@ impl HashmapUserStore {
             users: HashMap::new(),
         }
     }
+}
 
-    pub fn add_user(&mut self, user: User) -> Result<(), UserStoreError> {
+#[async_trait::async_trait]
+impl UserStore for HashmapUserStore {
+    async fn add_user(&mut self, user: User) -> Result<(), UserStoreError> {
         // Return `UserStoreError::UserAlreadyExists` if the user already exists,
         // otherwise insert the user into the hashmap and return `Ok(())`.
         if self.users.contains_key(&user.email) {
@@ -37,15 +32,15 @@ impl HashmapUserStore {
         Ok(())
     }
 
-    pub fn get_user(&self, email: &str) -> Result<User, UserStoreError> {
+    async fn get_user(&self, email: &str) -> Result<User, UserStoreError> {
         self.users
             .get(email)
             .cloned()
             .ok_or(UserStoreError::UserNotFound)
     }
 
-    pub fn validate_user(&self, email: &str, password: &str) -> Result<(), UserStoreError> {
-        let user = self.get_user(email)?;
+    async fn validate_user(&self, email: &str, password: &str) -> Result<(), UserStoreError> {
+        let user = self.get_user(email).await?;
         if user.password != password {
             return Err(UserStoreError::InvalidCredentials);
         }
@@ -57,17 +52,19 @@ impl HashmapUserStore {
 mod tests {
     use super::*;
 
-    fn setup_store_and_get_user() -> Result<(HashmapUserStore, User), UserStoreError> {
+    async fn setup_store_and_get_user() -> Result<(HashmapUserStore, User), UserStoreError> {
         let mut store = HashmapUserStore::new();
-        store.add_user(User::new("test@example.com", "123456789", false))?;
-        let user = store.get_user("test@example.com")?;
+        store
+            .add_user(User::new("test@example.com", "123456789", false))
+            .await?;
+        let user = store.get_user("test@example.com").await?;
 
         Ok((store, user))
     }
 
     #[tokio::test]
     async fn test_add_user() -> Result<(), UserStoreError> {
-        let (_, store_user) = setup_store_and_get_user()?;
+        let (_, store_user) = setup_store_and_get_user().await?;
 
         assert_eq!(store_user.password, "123456789");
         assert!(!store_user.requires_2fa);
@@ -77,16 +74,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_user() -> Result<(), UserStoreError> {
-        setup_store_and_get_user()?;
+        setup_store_and_get_user().await?;
 
         Ok(())
     }
 
     #[tokio::test]
     async fn test_validate_user() -> Result<(), UserStoreError> {
-        let (store, _) = setup_store_and_get_user()?;
+        let (store, _) = setup_store_and_get_user().await?;
 
-        store.validate_user("test@example.com", "123456789")?;
+        store.validate_user("test@example.com", "123456789").await?;
 
         Ok(())
     }
