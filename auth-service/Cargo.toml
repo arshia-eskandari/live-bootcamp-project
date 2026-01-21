@@ -14,3 +14,11 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 uuid = { version = "1.18.1", features = ["v4", "serde"] }
 async-trait = "0.1.89"
+validator = { version = "0.20", features = ["derive"] }
+
+
+[dev-dependencies]
+fake = "=4.4.0"
+rand = "0.9.2"
+quickcheck = "1.0.3"
+quickcheck_macros = "1.1.0"

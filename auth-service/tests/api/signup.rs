@@ -43,7 +43,7 @@ async fn should_return_201_if_valid_input() {
     let random_email = get_random_email();
     let user_request = serde_json::json!({
         "email": random_email,
-        "password": "password123",
+        "password": "123DSDFdasd@@456789",
         "requires2FA": true
     });
     let response = app.post_signup(&user_request).await;
@@ -112,7 +112,7 @@ async fn should_return_409_if_email_already_exists() {
     let random_email = get_random_email();
     let user_request = serde_json::json!({
         "email": random_email,
-        "password": "password123",
+        "password": "123DSDFdasd@@456789",
         "requires2FA": true
     });
     app.post_signup(&user_request).await;
