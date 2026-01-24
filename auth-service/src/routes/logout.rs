@@ -14,5 +14,7 @@ pub async fn logout(jar: CookieJar) -> Result<(CookieJar, impl IntoResponse), Au
         .await
         .map_err(|_| AuthAPIError::InvalidToken)?;
 
+    let jar = jar.remove("jwt");
+
     Ok((jar, StatusCode::OK))
 }
