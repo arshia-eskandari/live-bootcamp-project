@@ -30,10 +30,12 @@ impl IntoResponse for AuthAPIError {
             AuthAPIError::UnexpectedError => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Unexpected error")
             }
-            AuthAPIError::UserNotFound => (StatusCode::UNAUTHORIZED, "user doesn't exist"),
+            AuthAPIError::UserNotFound => (StatusCode::UNAUTHORIZED, "User doesn't exist"),
             AuthAPIError::IncorrectCredentials => {
-                (StatusCode::UNAUTHORIZED, "user crendetials do not match")
+                (StatusCode::UNAUTHORIZED, "User crendetials do not match")
             }
+            AuthAPIError::MissingToken => (StatusCode::BAD_REQUEST, "Missing token"),
+            AuthAPIError::InvalidToken => (StatusCode::UNAUTHORIZED, "Invalid token"),
         };
         let body = Json(ErrorResponse {
             error: error_message.to_string(),
