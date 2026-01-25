@@ -103,7 +103,7 @@ impl TestApp {
             .json(body)
             .send()
             .await
-            .expect("Failed to verify token")
+            .expect("Failed to execute request.")
     }
 }
 

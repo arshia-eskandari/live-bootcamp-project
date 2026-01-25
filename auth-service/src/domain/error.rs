@@ -26,3 +26,8 @@ pub enum EmailError {
     InvalidFormat,
     Empty,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenError {
+    Empty,
+}

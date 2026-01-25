@@ -1,4 +1,4 @@
-use super::error::{EmailError, PasswordError};
+use super::error::{EmailError, PasswordError, TokenError};
 use validator::ValidateEmail;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +60,26 @@ impl Email {
 }
 
 impl AsRef<str> for Email {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Token(pub String);
+
+impl Token {
+    pub fn parse(token: impl AsRef<str>) -> Result<Self, TokenError> {
+        let token = token.as_ref();
+        if token.is_empty() {
+            return Err(TokenError::Empty);
+        }
+
+        Ok(Token(token.to_string()))
+    }
+}
+
+impl AsRef<str> for Token {
     fn as_ref(&self) -> &str {
         &self.0
     }

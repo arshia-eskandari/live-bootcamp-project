@@ -70,6 +70,3 @@ impl Application {
 async fn verify_2fa() -> impl IntoResponse {
     StatusCode::OK.into_response()
 }
-async fn verify_token() -> impl IntoResponse {
-    StatusCode::OK.into_response()
-}
