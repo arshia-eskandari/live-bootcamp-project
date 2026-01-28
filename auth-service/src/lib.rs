@@ -16,6 +16,7 @@ use domain::AuthAPIError;
 pub use routes::{Application, SignupRequest, SignupResponse};
 use serde::{Deserialize, Serialize};
 pub use services::hashmap_user_store::HashmapUserStore;
+pub use services::hashset_banned_token_store::HashsetBannedTokenStore;
 
 #[derive(Serialize, Deserialize)]
 pub struct ErrorResponse {

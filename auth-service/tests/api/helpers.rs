@@ -1,5 +1,6 @@
 use auth_service::{
-    app_state::AppState, services::hashmap_user_store::HashmapUserStore, utils::constants::test,
+    app_state::AppState, services::hashmap_user_store::HashmapUserStore,
+    services::hashset_banned_token_store::HashsetBannedTokenStore, utils::constants::test,
     Application,
 };
 use reqwest::cookie::Jar;
@@ -16,7 +17,11 @@ pub struct TestApp {
 impl TestApp {
     pub async fn new() -> Self {
         let user_store = HashmapUserStore::new();
-        let app_state = AppState::new(Arc::new(RwLock::new(user_store)));
+        let banned_token_store = HashsetBannedTokenStore::new();
+        let app_state = AppState::new(
+            Arc::new(RwLock::new(user_store)),
+            Arc::new(RwLock::new(banned_token_store)),
+        );
 
         let app = Application::build(app_state, test::APP_ADDRESS)
             .await

@@ -1,6 +1,7 @@
 use crate::domain::data_store::BannedTokenStore;
 use std::collections::HashSet;
 
+#[derive(Clone)]
 pub struct HashsetBannedTokenStore {
     tokens: HashSet<String>,
 }
@@ -16,7 +17,7 @@ impl BannedTokenStore for HashsetBannedTokenStore {
 }
 
 impl HashsetBannedTokenStore {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             tokens: HashSet::new(),
         }
