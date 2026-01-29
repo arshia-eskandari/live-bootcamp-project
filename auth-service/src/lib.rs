@@ -4,7 +4,7 @@ pub mod routes;
 pub mod services;
 pub mod utils;
 
-pub use app_state::AppState;
+pub use app_state::{AppState, BannedTokenType};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},

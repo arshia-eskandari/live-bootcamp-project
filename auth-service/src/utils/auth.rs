@@ -1,9 +1,14 @@
 use super::constants::{JWT_COOKIE_NAME, JWT_SECRET};
+use crate::domain::data_store::BannedTokenStore;
 use crate::domain::Email;
+use crate::services::hashset_banned_token_store::HashsetBannedTokenStore;
+use crate::BannedTokenType;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 // Create cookie with a new JWT auth token
 pub fn generate_auth_cookie(email: &Email) -> Result<Cookie<'static>, GenerateTokenError> {
@@ -55,7 +60,15 @@ fn generate_auth_token(email: &Email) -> Result<String, GenerateTokenError> {
 }
 
 // Check if JWT auth token is valid by decoding it using the JWT secret
-pub async fn validate_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+pub async fn validate_token(
+    token: &str,
+    banned_token_store: BannedTokenType,
+) -> Result<Claims, jsonwebtoken::errors::Error> {
+    if banned_token_store.read().await.token_exists(token) {
+        return Err(jsonwebtoken::errors::Error::from(
+            jsonwebtoken::errors::ErrorKind::InvalidToken,
+        ));
+    }
     decode::<Claims>(
         token,
         &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
@@ -85,7 +98,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_auth_cookie() {
-        let email = Email::parse("test@example.com".to_owned()).unwrap();
+        let email = Email::parse("test@example.com").unwrap();
         let cookie = generate_auth_cookie(&email).unwrap();
         assert_eq!(cookie.name(), JWT_COOKIE_NAME);
         assert_eq!(cookie.value().split('.').count(), 3);
@@ -107,16 +120,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_auth_token() {
-        let email = Email::parse("test@example.com".to_owned()).unwrap();
+        let email = Email::parse("test@example.com").unwrap();
         let result = generate_auth_token(&email).unwrap();
         assert_eq!(result.split('.').count(), 3);
     }
 
     #[tokio::test]
     async fn test_validate_token_with_valid_token() {
-        let email = Email::parse("test@example.com".to_owned()).unwrap();
+        let email = Email::parse("test@example.com").unwrap();
         let token = generate_auth_token(&email).unwrap();
-        let result = validate_token(&token).await.unwrap();
+        let result = validate_token(
+            &token,
+            Arc::new(RwLock::new(HashsetBannedTokenStore::new())),
+        )
+        .await
+        .unwrap();
         assert_eq!(result.sub, "test@example.com");
 
         let exp = Utc::now()
@@ -130,7 +148,11 @@ mod tests {
     #[tokio::test]
     async fn test_validate_token_with_invalid_token() {
         let token = "invalid_token".to_owned();
-        let result = validate_token(&token).await;
+        let result = validate_token(
+            &token,
+            Arc::new(RwLock::new(HashsetBannedTokenStore::new())),
+        )
+        .await;
         assert!(result.is_err());
     }
 }
