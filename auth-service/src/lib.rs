@@ -4,7 +4,6 @@ pub mod routes;
 pub mod services;
 pub mod utils;
 
-pub use app_state::{AppState, BannedTokenType};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -13,10 +12,20 @@ use axum::{
     Json, Router,
 };
 use domain::AuthAPIError;
-pub use routes::{Application, SignupRequest, SignupResponse};
 use serde::{Deserialize, Serialize};
-pub use services::hashmap_user_store::HashmapUserStore;
-pub use services::hashset_banned_token_store::HashsetBannedTokenStore;
+
+pub mod prelude {
+    pub use crate::app_state::{AppState, BannedTokenType};
+    pub use crate::routes::Application;
+    pub use crate::services::{
+        hashmap_user_store::HashmapUserStore, hashset_banned_token_store::HashsetBannedTokenStore,
+    };
+    pub use crate::ErrorResponse;
+}
+
+pub mod dto {
+    pub use crate::routes::{SignupRequest, SignupResponse, TwoFactorAuthResponse};
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct ErrorResponse {

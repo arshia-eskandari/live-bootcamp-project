@@ -1,8 +1,5 @@
-use auth_service::{
-    app_state::AppState, services::hashmap_user_store::HashmapUserStore,
-    services::hashset_banned_token_store::HashsetBannedTokenStore, utils::constants::test,
-    Application,
-};
+use auth_service::prelude::{AppState, Application, HashmapUserStore, HashsetBannedTokenStore};
+use auth_service::utils::constants::test;
 use reqwest::cookie::Jar;
 use std::sync::Arc;
 use tokio::sync::RwLock;

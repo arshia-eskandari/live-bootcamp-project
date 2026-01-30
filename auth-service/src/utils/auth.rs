@@ -1,8 +1,6 @@
 use super::constants::{JWT_COOKIE_NAME, JWT_SECRET};
-use crate::domain::data_store::BannedTokenStore;
-use crate::domain::Email;
-use crate::services::hashset_banned_token_store::HashsetBannedTokenStore;
-use crate::BannedTokenType;
+use crate::domain::{data_store::BannedTokenStore, Email};
+use crate::prelude::{BannedTokenType, HashsetBannedTokenStore};
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Validation};

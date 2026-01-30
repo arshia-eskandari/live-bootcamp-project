@@ -1,4 +1,4 @@
-use crate::{HashmapUserStore, HashsetBannedTokenStore};
+use crate::prelude::{HashmapUserStore, HashsetBannedTokenStore};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
