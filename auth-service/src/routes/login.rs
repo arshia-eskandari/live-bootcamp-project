@@ -1,12 +1,13 @@
+use crate::{
+    app_state::AppState,
+    domain::data_store::TwoFACodeStore,
+    domain::types::{LoginAttemptId, TwoFACode},
+    domain::{AuthAPIError, Email, Password, User, UserStore},
+    utils::auth::{generate_6_digit_code, generate_auth_cookie},
+};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    app_state::AppState,
-    domain::{AuthAPIError, Email, Password, User, UserStore},
-    utils::auth::generate_auth_cookie,
-};
 
 pub async fn login(
     State(state): State<AppState>,
@@ -25,7 +26,7 @@ pub async fn login(
         .map_err(|_| AuthAPIError::UserNotFound)?;
 
     match user.requires_2fa {
-        true => handle_2fa(&user, jar).await,
+        true => handle_2fa(&user, &state, jar).await,
         false => handle_no_2fa(&user, &password, jar).await,
     }
 }
@@ -33,8 +34,20 @@ pub async fn login(
 // New!
 async fn handle_2fa(
     user: &User,
+    state: &AppState,
     jar: CookieJar,
 ) -> Result<(CookieJar, (StatusCode, Json<LoginResponse>)), AuthAPIError> {
+    let login_attempt_id = LoginAttemptId::parse(uuid::Uuid::new_v4().to_string())
+        .map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let two_fa_code = TwoFACode::parse(generate_6_digit_code().to_string())
+        .map_err(|_| AuthAPIError::InvalidCredentials)?;
+
+    let mut two_fa_code_store = state.two_fa_code_store.write().await;
+    two_fa_code_store
+        .add_two_fa_code(user.email.clone(), login_attempt_id.clone(), two_fa_code)
+        .await
+        .map_err(|_| AuthAPIError::UnexpectedError)?;
+
     let updated_jar = update_cookie_jar(jar, &user.email)?;
     Ok((
         updated_jar,
@@ -42,7 +55,7 @@ async fn handle_2fa(
             StatusCode::PARTIAL_CONTENT,
             Json(LoginResponse::TwoFactorAuth(TwoFactorAuthResponse {
                 message: "2FA required".to_string(),
-                login_attempt_id: "12345".to_string(),
+                login_attempt_id: login_attempt_id.as_ref().to_owned(),
             })),
         ),
     ))

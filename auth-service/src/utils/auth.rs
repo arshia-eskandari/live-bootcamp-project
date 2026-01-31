@@ -4,6 +4,7 @@ use crate::prelude::{BannedTokenType, HashsetBannedTokenStore};
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Validation};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -90,9 +91,19 @@ pub struct Claims {
     pub exp: usize,
 }
 
+pub fn generate_6_digit_code() -> u32 {
+    rand::random_range(100_000..=999_999)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_6_digit_code_generator() {
+        let code = generate_6_digit_code();
+        assert!((100_000..=999_999).contains(&code))
+    }
 
     #[tokio::test]
     async fn test_generate_auth_cookie() {
