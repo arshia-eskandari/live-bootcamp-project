@@ -31,3 +31,29 @@ pub enum EmailError {
 pub enum TokenError {
     Empty,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoginAttemptIdError {
+    Empty,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TwoFACodeError {
+    Empty,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum UserStoreError {
+    UserAlreadyExists,
+    UserNotFound,
+    InvalidCredentials,
+    UnexpectedError,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TwoFACodeStoreError {
+    EmailAlreadyExists,
+    EmailNotFound,
+    InvalidCredentials,
+    UnexpectedError,
+}

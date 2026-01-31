@@ -18,7 +18,8 @@ pub mod prelude {
     pub use crate::app_state::{AppState, BannedTokenType};
     pub use crate::routes::Application;
     pub use crate::services::{
-        hashmap_user_store::HashmapUserStore, hashset_banned_token_store::HashsetBannedTokenStore,
+        hashmap_two_fa_code_store::HashmapTwoFACodeStore, hashmap_user_store::HashmapUserStore,
+        hashset_banned_token_store::HashsetBannedTokenStore,
     };
     pub use crate::ErrorResponse;
 }

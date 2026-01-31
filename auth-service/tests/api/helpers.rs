@@ -1,4 +1,7 @@
-use auth_service::prelude::{AppState, Application, HashmapUserStore, HashsetBannedTokenStore};
+use auth_service::app_state::{BannedTokenType, TwoFACodeType};
+use auth_service::prelude::{
+    AppState, Application, HashmapTwoFACodeStore, HashmapUserStore, HashsetBannedTokenStore,
+};
 use auth_service::utils::constants::test;
 use reqwest::cookie::Jar;
 use std::sync::Arc;
@@ -8,16 +11,21 @@ use uuid::Uuid;
 pub struct TestApp {
     pub address: String,
     pub cookie_jar: Arc<Jar>,
+    pub banned_token_store: BannedTokenType,
+    pub two_fa_code_store: TwoFACodeType,
     pub http_client: reqwest::Client,
 }
 
 impl TestApp {
     pub async fn new() -> Self {
-        let user_store = HashmapUserStore::new();
-        let banned_token_store = HashsetBannedTokenStore::new();
+        let user_store = Arc::new(RwLock::new(HashmapUserStore::new()));
+        let banned_token_store = Arc::new(RwLock::new(HashsetBannedTokenStore::new()));
+        let two_fa_code_store = Arc::new(RwLock::new(HashmapTwoFACodeStore::new()));
+
         let app_state = AppState::new(
-            Arc::new(RwLock::new(user_store)),
-            Arc::new(RwLock::new(banned_token_store)),
+            user_store,
+            banned_token_store.clone(),
+            two_fa_code_store.clone(),
         );
 
         let app = Application::build(app_state, test::APP_ADDRESS)
@@ -41,6 +49,8 @@ impl TestApp {
             address,
             cookie_jar,
             http_client,
+            banned_token_store,
+            two_fa_code_store,
         }
     }
 

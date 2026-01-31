@@ -1,4 +1,4 @@
-use super::error::{EmailError, PasswordError, TokenError};
+use super::error::{EmailError, LoginAttemptIdError, PasswordError, TokenError, TwoFACodeError};
 use validator::ValidateEmail;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,12 +85,69 @@ impl AsRef<str> for Token {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoginAttemptId(pub String);
+
+impl LoginAttemptId {
+    pub fn parse(login_attempt_id: impl AsRef<str>) -> Result<Self, LoginAttemptIdError> {
+        let login_attempt_id = login_attempt_id.as_ref();
+        if login_attempt_id.is_empty() {
+            return Err(LoginAttemptIdError::Empty);
+        }
+
+        Ok(LoginAttemptId(login_attempt_id.to_string()))
+    }
+}
+
+impl AsRef<str> for LoginAttemptId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TwoFACode(pub String);
+
+impl TwoFACode {
+    pub fn parse(two_fa_code: impl AsRef<str>) -> Result<Self, TwoFACodeError> {
+        let two_fa_code = two_fa_code.as_ref();
+        if two_fa_code.is_empty() {
+            return Err(TwoFACodeError::Empty);
+        }
+
+        Ok(TwoFACode(two_fa_code.to_string()))
+    }
+}
+
+impl AsRef<str> for TwoFACode {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use fake::{Fake, Faker};
     use quickcheck_macros::quickcheck;
     use rand::{rngs::StdRng, SeedableRng};
+
+    #[test]
+    fn test_two_fa_code_parsing() {
+        let is_valid_two_fa_code = TwoFACode::parse("8J38J1E09J3E48H7502J8D").is_ok();
+        let is_invalid_two_fa_code = TwoFACode::parse("") == Err(TwoFACodeError::Empty);
+
+        assert!(is_valid_two_fa_code && is_invalid_two_fa_code)
+    }
+
+    #[test]
+    fn test_login_attempt_id_parsing() {
+        let is_valid_login_attempt_id = LoginAttemptId::parse("8J38J1E09J3E48H7502J8D").is_ok();
+        let is_invalid_login_attempt_id =
+            LoginAttemptId::parse("") == Err(LoginAttemptIdError::Empty);
+
+        assert!(is_valid_login_attempt_id && is_invalid_login_attempt_id)
+    }
 
     #[test]
     fn test_valid_email_parsing() {
