@@ -2,7 +2,7 @@ use crate::{
     app_state::AppState,
     domain::data_store::TwoFACodeStore,
     domain::types::{LoginAttemptId, TwoFACode},
-    domain::{AuthAPIError, Email, Password, User, UserStore},
+    domain::{AuthAPIError, Email, EmailClient, Password, User, UserStore},
     utils::auth::{generate_6_digit_code, generate_auth_cookie},
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
@@ -44,7 +44,21 @@ async fn handle_2fa(
 
     let mut two_fa_code_store = state.two_fa_code_store.write().await;
     two_fa_code_store
-        .add_two_fa_code(user.email.clone(), login_attempt_id.clone(), two_fa_code)
+        .add_two_fa_code(
+            user.email.clone(),
+            login_attempt_id.clone(),
+            two_fa_code.clone(),
+        )
+        .await
+        .map_err(|_| AuthAPIError::UnexpectedError)?;
+
+    let email_client = state.email_client.read().await;
+    email_client
+        .send_email(
+            &user.email,
+            "Your 2FA Code",
+            &format!("Your 2FA Code is {}.", two_fa_code.as_ref()),
+        )
         .await
         .map_err(|_| AuthAPIError::UnexpectedError)?;
 

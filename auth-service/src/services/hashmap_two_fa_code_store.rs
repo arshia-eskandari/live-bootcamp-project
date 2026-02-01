@@ -32,6 +32,17 @@ impl TwoFACodeStore for HashmapTwoFACodeStore {
         self.codes.remove(email);
         Ok(())
     }
+    async fn get_two_fa_code(
+        &self,
+        email: &Email,
+    ) -> Result<(LoginAttemptId, TwoFACode), TwoFACodeStoreError> {
+        self.codes
+            .get(email)
+            .map(|(_login_attempt_id, two_fa_code)| {
+                (_login_attempt_id.clone(), two_fa_code.clone())
+            })
+            .ok_or(TwoFACodeStoreError::EmailNotFound)
+    }
 }
 
 impl HashmapTwoFACodeStore {

@@ -1,6 +1,7 @@
 use auth_service::app_state::{BannedTokenType, TwoFACodeType};
 use auth_service::prelude::{
     AppState, Application, HashmapTwoFACodeStore, HashmapUserStore, HashsetBannedTokenStore,
+    MockEmailClient,
 };
 use auth_service::utils::constants::test;
 use reqwest::cookie::Jar;
@@ -21,11 +22,13 @@ impl TestApp {
         let user_store = Arc::new(RwLock::new(HashmapUserStore::new()));
         let banned_token_store = Arc::new(RwLock::new(HashsetBannedTokenStore::new()));
         let two_fa_code_store = Arc::new(RwLock::new(HashmapTwoFACodeStore::new()));
+        let email_client = Arc::new(RwLock::new(MockEmailClient::new()));
 
         let app_state = AppState::new(
             user_store,
             banned_token_store.clone(),
             two_fa_code_store.clone(),
+            email_client,
         );
 
         let app = Application::build(app_state, test::APP_ADDRESS)

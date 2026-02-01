@@ -11,8 +11,8 @@ pub use verify_2fa::*;
 pub use verify_token::*;
 
 use crate::prelude::AppState;
-use axum::{response::IntoResponse, routing::post, serve::Serve, Router};
-use reqwest::{Method, StatusCode};
+use axum::{routing::post, serve::Serve, Router};
+use reqwest::Method;
 use std::error::Error;
 use tokio::net::TcpListener;
 use tower_http::{cors::CorsLayer, services::ServeDir};
@@ -29,7 +29,6 @@ impl Application {
     pub async fn build(app_state: AppState, address: &str) -> Result<Self, Box<dyn Error>> {
         let allowed_origins = [
             "http://localhost:8000".parse()?,
-            // TODO: Replace [YOUR_DROPLET_IP] with your Droplet IP address
             "http://[157.230.191.28]:8000".parse()?,
         ];
 
@@ -65,8 +64,4 @@ impl Application {
         println!("listening on {}", &self.address);
         self.server.await
     }
-}
-
-async fn verify_2fa() -> impl IntoResponse {
-    StatusCode::OK.into_response()
 }

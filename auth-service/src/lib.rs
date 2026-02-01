@@ -16,10 +16,11 @@ use serde::{Deserialize, Serialize};
 
 pub mod prelude {
     pub use crate::app_state::{AppState, BannedTokenType};
+    pub use crate::domain::EmailClient;
     pub use crate::routes::Application;
     pub use crate::services::{
         hashmap_two_fa_code_store::HashmapTwoFACodeStore, hashmap_user_store::HashmapUserStore,
-        hashset_banned_token_store::HashsetBannedTokenStore,
+        hashset_banned_token_store::HashsetBannedTokenStore, mock_email_client::MockEmailClient,
     };
     pub use crate::ErrorResponse;
 }
