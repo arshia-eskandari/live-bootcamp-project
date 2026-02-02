@@ -1,3 +1,4 @@
+mod helpers;
 mod login;
 mod logout;
 mod signup;

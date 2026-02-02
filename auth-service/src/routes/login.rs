@@ -3,7 +3,8 @@ use crate::{
     domain::data_store::TwoFACodeStore,
     domain::types::{LoginAttemptId, TwoFACode},
     domain::{AuthAPIError, Email, EmailClient, Password, User, UserStore},
-    utils::auth::{generate_6_digit_code, generate_auth_cookie},
+    routes::helpers::update_cookie_jar,
+    utils::auth::generate_6_digit_code,
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_extra::extract::CookieJar;
@@ -62,9 +63,8 @@ async fn handle_2fa(
         .await
         .map_err(|_| AuthAPIError::UnexpectedError)?;
 
-    let updated_jar = update_cookie_jar(jar, &user.email)?;
     Ok((
-        updated_jar,
+        jar,
         (
             StatusCode::PARTIAL_CONTENT,
             Json(LoginResponse::TwoFactorAuth(TwoFactorAuthResponse {
@@ -91,14 +91,6 @@ async fn handle_no_2fa(
         updated_jar,
         (StatusCode::OK, Json(LoginResponse::RegularAuth)),
     ))
-}
-
-fn update_cookie_jar(jar: CookieJar, email: &Email) -> Result<CookieJar, AuthAPIError> {
-    let auth_cookie = generate_auth_cookie(email).map_err(|_| AuthAPIError::UnexpectedError)?;
-
-    let updated_jar = jar.add(auth_cookie);
-
-    Ok(updated_jar)
 }
 
 // The login route can return 2 possible success responses.
