@@ -54,7 +54,7 @@ async fn should_return_200_if_valid_jwt_cookie() {
     let user_request = serde_json::json!({
         "email": random_email,
         "password": "123DSDFdasd@@456789",
-        "requires2FA": true
+        "requires2FA": false
     });
 
     app.post_signup(&user_request).await;
@@ -97,7 +97,7 @@ async fn should_return_400_if_logout_called_twice_in_a_row() {
     let user_request = serde_json::json!({
         "email": random_email,
         "password": "123DSDFdasd@@456789",
-        "requires2FA": true
+        "requires2FA": false
     });
 
     app.post_signup(&user_request).await;
@@ -131,7 +131,7 @@ async fn should_return_401_if_banned_token() {
     let user_request = serde_json::json!({
         "email": random_email,
         "password": "123DSDFdasd@@456789",
-        "requires2FA": true
+        "requires2FA": false
     });
 
     app.post_signup(&user_request).await;
