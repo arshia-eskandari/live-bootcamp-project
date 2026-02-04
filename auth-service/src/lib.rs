@@ -7,12 +7,12 @@ pub mod utils;
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
-    serve::Serve,
-    Json, Router,
+    Json,
 };
 use domain::AuthAPIError;
 use serde::{Deserialize, Serialize};
+use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
 
 pub mod prelude {
     pub use crate::app_state::{AppState, BannedTokenType};
@@ -54,4 +54,9 @@ impl IntoResponse for AuthAPIError {
         });
         (status, body).into_response()
     }
+}
+
+pub async fn get_postgres_pool(url: &str) -> Result<PgPool, sqlx::Error> {
+    // Create a new PostgreSQL connection pool
+    PgPoolOptions::new().max_connections(5).connect(url).await
 }
