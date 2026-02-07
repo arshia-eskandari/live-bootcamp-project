@@ -1,10 +1,9 @@
+use crate::helpers::{get_random_email, TestApp};
+use auth_macros::db_test;
 use auth_service::{utils::constants::JWT_COOKIE_NAME, ErrorResponse};
 
-use crate::helpers::{get_random_email, TestApp};
-
-#[tokio::test]
+#[db_test]
 async fn should_return_200_valid_token() {
-    let app = TestApp::new().await;
     let random_email = get_random_email();
 
     let signup_body = serde_json::json!({
@@ -36,9 +35,8 @@ async fn should_return_200_valid_token() {
     assert_eq!(verify_response.status().as_u16(), 200);
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_401_if_invalid_token() {
-    let app = TestApp::new().await;
     let login_body = serde_json::json!({
         "token": "invalid-token-123DSDFdasd@@456789",
     });
@@ -57,9 +55,8 @@ async fn should_return_401_if_invalid_token() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_422_if_malformed_input() {
-    let app = TestApp::new().await;
     let login_body = serde_json::json!({});
 
     let response = app.post_verify_token(&login_body).await;
@@ -67,9 +64,8 @@ async fn should_return_422_if_malformed_input() {
     assert_eq!(response.status().as_u16(), 422);
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_401_if_banned_token() {
-    let app = TestApp::new().await;
     let random_email = get_random_email();
     let user_request = serde_json::json!({
         "email": random_email,

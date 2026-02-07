@@ -1,11 +1,10 @@
 use crate::helpers::{get_random_email, TestApp};
+use auth_macros::db_test;
 use auth_service::{utils::constants::JWT_COOKIE_NAME, ErrorResponse};
 use reqwest::Url;
 
-#[tokio::test]
+#[db_test]
 async fn should_return_400_if_jwt_cookie_missing() {
-    let app = TestApp::new().await;
-
     let response = app.post_logout().await;
 
     assert_eq!(response.status().as_u16(), 400);
@@ -20,11 +19,8 @@ async fn should_return_400_if_jwt_cookie_missing() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_401_if_invalid_token() {
-    let app = TestApp::new().await;
-
-    // add invalid cookie
     app.cookie_jar.add_cookie_str(
         &format!(
             "{}=invalid; HttpOnly; SameSite=Lax; Secure; Path=/",
@@ -47,9 +43,8 @@ async fn should_return_401_if_invalid_token() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_200_if_valid_jwt_cookie() {
-    let app = TestApp::new().await;
     let random_email = get_random_email();
     let user_request = serde_json::json!({
         "email": random_email,
@@ -90,9 +85,8 @@ async fn should_return_200_if_valid_jwt_cookie() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_400_if_logout_called_twice_in_a_row() {
-    let app = TestApp::new().await;
     let random_email = get_random_email();
     let user_request = serde_json::json!({
         "email": random_email,
@@ -124,9 +118,8 @@ async fn should_return_400_if_logout_called_twice_in_a_row() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_401_if_banned_token() {
-    let app = TestApp::new().await;
     let random_email = get_random_email();
     let user_request = serde_json::json!({
         "email": random_email,

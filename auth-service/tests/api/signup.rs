@@ -1,11 +1,10 @@
 use crate::helpers::{get_random_email, TestApp};
+use auth_macros::db_test;
 use auth_service::dto::SignupResponse;
 use auth_service::prelude::ErrorResponse;
 
-#[tokio::test]
+#[db_test]
 async fn should_return_422_if_malformed_input() {
-    let app = TestApp::new().await;
-
     let random_email = get_random_email(); // Call helper method to generate email
 
     let test_cases = [
@@ -38,9 +37,8 @@ async fn should_return_422_if_malformed_input() {
     }
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_201_if_valid_input() {
-    let app = TestApp::new().await;
     let random_email = get_random_email();
     let user_request = serde_json::json!({
         "email": random_email,
@@ -65,10 +63,8 @@ async fn should_return_201_if_valid_input() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_400_if_invalid_input() {
-    let app = TestApp::new().await;
-
     let test_cases = [
         serde_json::json!({
             "email": "my email",
@@ -107,9 +103,8 @@ async fn should_return_400_if_invalid_input() {
     }
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_409_if_email_already_exists() {
-    let app = TestApp::new().await;
     let random_email = get_random_email();
     let user_request = serde_json::json!({
         "email": random_email,

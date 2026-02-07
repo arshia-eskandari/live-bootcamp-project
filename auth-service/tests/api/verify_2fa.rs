@@ -1,11 +1,10 @@
 use crate::helpers::{get_random_email, TestApp};
+use auth_macros::db_test;
 use auth_service::domain::types::{Email, LoginAttemptId, TwoFACode};
 use auth_service::domain::TwoFACodeStore;
 
-#[tokio::test]
+#[db_test]
 async fn should_return_422_if_malformed_input() {
-    let app = TestApp::new().await;
-
     let random_email = get_random_email();
 
     let test_cases = [
@@ -36,10 +35,8 @@ async fn should_return_422_if_malformed_input() {
     }
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_400_if_invalid_input() {
-    let app = TestApp::new().await;
-
     let test_case = serde_json::json!({
         "email": "invalidemaidatdomaindotcom",
         "loginAttemptId": "",
@@ -55,10 +52,8 @@ async fn should_return_400_if_invalid_input() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_401_if_incorrect_credentials() {
-    let app = TestApp::new().await;
-
     let random_email = get_random_email();
 
     let test_case = serde_json::json!({
@@ -76,10 +71,8 @@ async fn should_return_401_if_incorrect_credentials() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_401_if_old_code() {
-    let app = TestApp::new().await;
-
     let random_email = Email::parse(get_random_email()).unwrap();
     let login_attempt_id = LoginAttemptId::parse("c9a2865b-467d-498b-93b8-634903ae68e0").unwrap();
     let two_fa_code = TwoFACode::parse("123456").unwrap();
@@ -107,10 +100,8 @@ async fn should_return_401_if_old_code() {
     );
 }
 
-#[tokio::test]
+#[db_test]
 async fn should_return_200_if_correct_code() {
-    let app = TestApp::new().await;
-
     let random_email = Email::parse(get_random_email()).unwrap();
     let login_attempt_id = LoginAttemptId::parse("c9a2865b-467d-498b-93b8-634903ae68e0").unwrap();
     let two_fa_code = TwoFACode::parse("123456").unwrap();
