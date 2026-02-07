@@ -1,11 +1,11 @@
 use crate::prelude::{
-    HashmapTwoFACodeStore, HashmapUserStore, HashsetBannedTokenStore, MockEmailClient,
+    HashmapTwoFACodeStore, HashsetBannedTokenStore, MockEmailClient, PostgresUserStore,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // Using a type alias to improve readability!
-pub type UserStoreType = Arc<RwLock<HashmapUserStore>>;
+pub type UserStoreType = Arc<RwLock<PostgresUserStore>>;
 pub type BannedTokenType = Arc<RwLock<HashsetBannedTokenStore>>;
 pub type TwoFACodeType = Arc<RwLock<HashmapTwoFACodeStore>>;
 pub type EmailClientType = Arc<RwLock<MockEmailClient>>;

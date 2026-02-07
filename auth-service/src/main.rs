@@ -1,7 +1,7 @@
 use auth_service::get_postgres_pool;
 use auth_service::prelude::{
-    AppState, Application, HashmapTwoFACodeStore, HashmapUserStore, HashsetBannedTokenStore,
-    MockEmailClient,
+    AppState, Application, HashmapTwoFACodeStore, HashsetBannedTokenStore, MockEmailClient,
+    PostgresUserStore,
 };
 use auth_service::utils::constants::prod;
 use auth_service::utils::constants::DATABASE_URL;
@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 #[tokio::main]
 async fn main() {
     let pg_pool = configure_postgresql().await;
-    let user_store = HashmapUserStore::new();
+    let user_store = PostgresUserStore::new(pg_pool);
     let banned_token_store = HashsetBannedTokenStore::new();
     let two_fa_code_store = HashmapTwoFACodeStore::new();
     let email_client = MockEmailClient::new();

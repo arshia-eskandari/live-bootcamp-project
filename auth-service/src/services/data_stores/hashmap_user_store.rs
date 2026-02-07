@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::domain::{Email, Password, User, UserStore, UserStoreError};
+use crate::domain::{Email, User, UserStore, UserStoreError};
 
 pub struct HashmapUserStore {
     users: HashMap<Email, User>,
@@ -39,9 +39,9 @@ impl UserStore for HashmapUserStore {
             .ok_or(UserStoreError::UserNotFound)
     }
 
-    async fn validate_user(&self, email: Email, password: Password) -> Result<(), UserStoreError> {
+    async fn validate_user(&self, email: Email, password: &str) -> Result<(), UserStoreError> {
         let user = self.get_user(&email).await?;
-        if user.password != password {
+        if user.password.verify_raw_password(password).await.is_err() {
             return Err(UserStoreError::InvalidCredentials);
         }
         Ok(())
@@ -51,13 +51,14 @@ impl UserStore for HashmapUserStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::HashedPassword;
 
     async fn setup_store_and_get_user() -> Result<(HashmapUserStore, User), UserStoreError> {
         let mut store = HashmapUserStore::new();
         store
             .add_user(User::new(
                 Email::parse("test@example.com").unwrap(),
-                Password::parse("123DSDFdasd@@456789").unwrap(),
+                HashedPassword::parse("123DSDFdasd@@456789").await.unwrap(),
                 false,
             ))
             .await?;
@@ -70,12 +71,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_user() -> Result<(), UserStoreError> {
-        let (_, store_user) = setup_store_and_get_user().await?;
+        let (store, store_user) = setup_store_and_get_user().await?;
 
-        assert_eq!(
-            store_user.password,
-            Password::parse("123DSDFdasd@@456789").unwrap()
-        );
+        store
+            .validate_user(
+                Email::parse("test@example.com").unwrap(),
+                "123DSDFdasd@@456789",
+            )
+            .await?;
         assert!(!store_user.requires_2fa);
 
         Ok(())
@@ -95,7 +98,7 @@ mod tests {
         store
             .validate_user(
                 Email::parse("test@example.com").unwrap(),
-                Password::parse("123DSDFdasd@@456789").unwrap(),
+                "123DSDFdasd@@456789",
             )
             .await?;
 

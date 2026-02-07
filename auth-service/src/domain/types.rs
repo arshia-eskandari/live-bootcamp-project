@@ -1,8 +1,13 @@
 use super::error::{EmailError, LoginAttemptIdError, PasswordError, TokenError, TwoFACodeError};
+use argon2::{
+    password_hash::{rand_core::OsRng, SaltString},
+    Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version,
+};
+use std::error::Error;
 use validator::ValidateEmail;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Password(pub String);
+struct Password(pub String);
 
 impl Password {
     pub fn parse(password: impl AsRef<str>) -> Result<Self, PasswordError> {
@@ -125,9 +130,85 @@ impl AsRef<str> for TwoFACode {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct HashedPassword(String);
+
+impl HashedPassword {
+    pub async fn parse(s: impl AsRef<str>) -> Result<Self, String> {
+        Password::parse(&s).map_err(|e| format!("{e}"))?;
+
+        let hash = compute_password_hash(s.as_ref())
+            .await
+            .map_err(|e| e.to_string())?;
+
+        HashedPassword::parse_password_hash(hash)
+    }
+
+    pub fn parse_password_hash(hash: String) -> Result<HashedPassword, String> {
+        PasswordHash::new(&hash).map_err(|e| e.to_string())?;
+        Ok(HashedPassword(hash))
+    }
+
+    pub async fn verify_raw_password(
+        &self,
+        password_candidate: &str,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let password_hash_str = self.as_ref().to_owned();
+        let password_candidate = password_candidate.to_owned();
+
+        tokio::task::spawn_blocking(move || -> Result<(), Box<dyn Error + Send + Sync>> {
+            let parsed_hash = PasswordHash::new(&password_hash_str)?;
+
+            Argon2::default()
+                .verify_password(password_candidate.as_bytes(), &parsed_hash)
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        })
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?
+    }
+}
+
+async fn compute_password_hash(password: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+    let password = password.to_owned();
+
+    let hash =
+        tokio::task::spawn_blocking(move || -> Result<String, Box<dyn Error + Send + Sync>> {
+            let salt = SaltString::generate(&mut OsRng);
+
+            let password_hash = Argon2::new(
+                Algorithm::Argon2id,
+                Version::V0x13,
+                Params::new(1024, 2, 1, None)?,
+            )
+            .hash_password(password.as_bytes(), &salt)?
+            .to_string();
+
+            Ok(password_hash)
+        })
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)??;
+
+    Ok(hash)
+}
+
+impl AsRef<str> for HashedPassword {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use argon2::{
+        // new
+        password_hash::{rand_core::OsRng, SaltString},
+        Algorithm,
+        Argon2,
+        Params,
+        PasswordHasher,
+        Version,
+    };
     use fake::{Fake, Faker};
     use quickcheck_macros::quickcheck;
     use rand::{rngs::StdRng, SeedableRng};
@@ -477,5 +558,133 @@ mod tests {
                 symbol
             );
         }
+    }
+
+    #[tokio::test]
+    async fn empty_string_is_rejected() {
+        let password = "".to_owned();
+
+        assert!(HashedPassword::parse(password).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn string_less_than_8_characters_is_rejected() {
+        let password = "1234567".to_owned();
+        // updated!
+        assert!(HashedPassword::parse(password).await.is_err());
+    }
+
+    // new
+    #[test]
+    fn can_parse_valid_argon2_hash() {
+        // Arrange - Create a valid Argon2 hash
+        let raw_password = "TestPassword123";
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::new(
+            Algorithm::Argon2id,
+            Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap(),
+        );
+
+        let hash_string = argon2
+            .hash_password(raw_password.as_bytes(), &salt)
+            .unwrap()
+            .to_string();
+
+        // Act
+        let hash_password = HashedPassword::parse_password_hash(hash_string.clone()).unwrap();
+
+        // Assert
+        assert_eq!(hash_password.as_ref(), hash_string.as_str());
+        assert!(hash_password.as_ref().starts_with("$argon2id$v=19$"));
+    }
+
+    // new
+    #[tokio::test]
+    async fn can_verify_raw_password() {
+        let raw_password = "TestPassword123";
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::new(
+            Algorithm::Argon2id,
+            Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap(),
+        );
+
+        let hash_string = argon2
+            .hash_password(raw_password.as_bytes(), &salt)
+            .unwrap()
+            .to_string();
+
+        let hash_password = HashedPassword::parse_password_hash(hash_string.clone()).unwrap();
+
+        assert_eq!(hash_password.as_ref(), hash_string.as_str());
+        assert!(hash_password.as_ref().starts_with("$argon2id$v=19$"));
+
+        assert_eq!(
+            hash_password
+                .verify_raw_password(raw_password)
+                .await
+                .unwrap(),
+            ()
+        );
+    }
+
+    #[derive(Debug, Clone)]
+    struct ValidPasswordFixture(pub String);
+
+    impl quickcheck::Arbitrary for ValidPasswordFixture {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            use rand::{rngs::SmallRng, Rng, SeedableRng};
+
+            // Seed RNG using quickcheck's generator (stable-ish, but fine)
+            let seed = u64::arbitrary(g);
+            let mut rng = SmallRng::seed_from_u64(seed);
+
+            // Must be from YOUR allowed symbol set
+            const SYMBOLS: &[u8] = b"!@#$%^&*()_+-=[]{}|;:,.<>?";
+
+            // Choose length >= 8
+            let len = rng.random_range(8..=30);
+
+            // Start by guaranteeing required categories
+            let mut chars: Vec<u8> = Vec::with_capacity(len);
+            chars.push(rng.random_range(b'A'..=b'Z')); // uppercase
+            chars.push(rng.random_range(b'a'..=b'z')); // lowercase
+            chars.push(rng.random_range(b'0'..=b'9')); // digit
+            chars.push(SYMBOLS[rng.random_range(0..SYMBOLS.len())]); // allowed symbol
+
+            // Fill the rest with allowed ASCII that is NOT whitespace
+            // (letters, digits, allowed symbols)
+            while chars.len() < len {
+                let pick = rng.random_range(0..3);
+                let c = match pick {
+                    0 => rng.random_range(b'A'..=b'Z'),
+                    1 => rng.random_range(b'a'..=b'z'),
+                    _ => {
+                        // mix digits + allowed symbols
+                        if rng.random_bool(0.5) {
+                            rng.random_range(b'0'..=b'9')
+                        } else {
+                            SYMBOLS[rng.random_range(0..SYMBOLS.len())]
+                        }
+                    }
+                };
+                chars.push(c);
+            }
+
+            // Shuffle so the guaranteed chars aren’t always at the front
+            for i in (1..chars.len()).rev() {
+                let j = rng.random_range(0..=i);
+                chars.swap(i, j);
+            }
+
+            Self(String::from_utf8(chars).unwrap())
+        }
+    }
+
+    #[tokio::test]
+    #[quickcheck_macros::quickcheck]
+    async fn valid_passwords_are_parsed_successfully(valid_password: ValidPasswordFixture) -> bool {
+        HashedPassword::parse(valid_password.0).await.is_ok() // updated!
     }
 }

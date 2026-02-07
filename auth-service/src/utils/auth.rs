@@ -1,13 +1,10 @@
 use super::constants::{JWT_COOKIE_NAME, JWT_SECRET};
 use crate::domain::{data_store::BannedTokenStore, Email};
-use crate::prelude::{BannedTokenType, HashsetBannedTokenStore};
+use crate::prelude::BannedTokenType;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Validation};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 // Create cookie with a new JWT auth token
 pub fn generate_auth_cookie(email: &Email) -> Result<Cookie<'static>, GenerateTokenError> {
@@ -98,6 +95,9 @@ pub fn generate_6_digit_code() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::HashsetBannedTokenStore;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
 
     #[test]
     fn test_6_digit_code_generator() {

@@ -1,4 +1,4 @@
-use crate::domain::{Email, Password};
+use crate::domain::{Email, HashedPassword};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
@@ -9,8 +9,9 @@ pub async fn signup(
     Json(request): Json<SignupRequest>,
 ) -> Result<impl IntoResponse, AuthAPIError> {
     let email = Email::parse(request.email).map_err(|_| AuthAPIError::InvalidCredentials)?;
-    let password =
-        Password::parse(request.password).map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let password = HashedPassword::parse(request.password)
+        .await
+        .map_err(|_| AuthAPIError::InvalidCredentials)?;
     let requires_2fa = request.requires_2fa;
 
     let user = User::new(email, password, requires_2fa);

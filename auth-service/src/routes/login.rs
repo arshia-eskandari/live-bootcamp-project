@@ -2,7 +2,7 @@ use crate::{
     app_state::AppState,
     domain::data_store::TwoFACodeStore,
     domain::types::{LoginAttemptId, TwoFACode},
-    domain::{AuthAPIError, Email, EmailClient, Password, User, UserStore},
+    domain::{AuthAPIError, Email, EmailClient, HashedPassword, User, UserStore},
     routes::helpers::update_cookie_jar,
     utils::auth::generate_6_digit_code,
 };
@@ -16,8 +16,10 @@ pub async fn login(
     Json(request): Json<LoginRequest>,
 ) -> Result<(CookieJar, impl IntoResponse), AuthAPIError> {
     let email = Email::parse(request.email).map_err(|_| AuthAPIError::InvalidCredentials)?;
-    let password =
-        Password::parse(request.password).map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let raw_password = request.password;
+    HashedPassword::parse(&raw_password)
+        .await
+        .map_err(|_| AuthAPIError::InvalidCredentials)?;
 
     let user_store = state.user_store.read().await;
 
@@ -28,7 +30,7 @@ pub async fn login(
 
     match user.requires_2fa {
         true => handle_2fa(&user, &state, jar).await,
-        false => handle_no_2fa(&user, &password, jar).await,
+        false => handle_no_2fa(&user, &raw_password, jar).await,
     }
 }
 
@@ -78,10 +80,10 @@ async fn handle_2fa(
 // New!
 async fn handle_no_2fa(
     user: &User,
-    password: &Password,
+    password: &str,
     jar: CookieJar,
 ) -> Result<(CookieJar, (StatusCode, Json<LoginResponse>)), AuthAPIError> {
-    if password != &user.password {
+    if user.password.verify_raw_password(password).await.is_err() {
         return Err(AuthAPIError::IncorrectCredentials);
     }
 
