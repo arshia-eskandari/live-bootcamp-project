@@ -11,6 +11,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+
     steps:
       # Checkout code from the repository
     - name: Checkout code
@@ -31,6 +46,14 @@ jobs:
     - name: Install Rust
       run: rustup update stable && rustup default stable
 
+    - name: Wait for Postgres
+      run: |
+        for i in {1..30}; do
+          pg_isready -h localhost -p 5432 -U postgres && exit 0
+          sleep 1
+        done
+        exit 1
+
     - name: Build and test app-service code
       working-directory: ./app-service
       run: |
@@ -41,8 +64,9 @@ jobs:
       working-directory: ./auth-service
       run: |
         export JWT_SECRET=${{ secrets.JWT_SECRET }}
-        export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432"
+        export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/postgres"
         export SQLX_OFFLINE=true
+        cargo sqlx migrate run
         cargo build --verbose
         cargo test --verbose
 
@@ -97,7 +121,7 @@ jobs:
           cd ~
           export JWT_SECRET=${{ secrets.JWT_SECRET }}
           export AUTH_SERVICE_IP=${{ vars.DROPLET_IP }}
-          export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@db:5432"
+          export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@db:5432.postgres"
           docker compose down
           docker compose pull
           docker compose up -d
