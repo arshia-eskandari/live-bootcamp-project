@@ -40,7 +40,8 @@ jobs:
     - name: Build and test auth-service code
       working-directory: ./auth-service
       run: |
-        export JWT_SECRET=secret
+        export JWT_SECRET=${{ secrets.JWT_SECRET }}
+        export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@db:5432"
         cargo build --verbose
         cargo test --verbose
 
@@ -95,6 +96,7 @@ jobs:
           cd ~
           export JWT_SECRET=${{ secrets.JWT_SECRET }}
           export AUTH_SERVICE_IP=${{ vars.DROPLET_IP }}
+          export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@db:5432"
           docker compose down
           docker compose pull
           docker compose up -d
