@@ -67,7 +67,7 @@ jobs:
       working-directory: ./auth-service
       run: |
         export JWT_SECRET=${{ secrets.JWT_SECRET }}
-        export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/postgres"
+        export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432"
         export SQLX_OFFLINE=true
         cargo sqlx migrate run
         cargo build --verbose
@@ -124,7 +124,7 @@ jobs:
           cd ~
           export JWT_SECRET=${{ secrets.JWT_SECRET }}
           export AUTH_SERVICE_IP=${{ vars.DROPLET_IP }}
-          export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@db:5432/postgres"
+          export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@db:5432"
           docker compose down
           docker compose pull
           docker compose up -d
