@@ -80,3 +80,8 @@ pub enum TwoFACodeStoreError {
     InvalidCredentials,
     UnexpectedError,
 }
+
+#[derive(Debug, PartialEq)]
+pub enum BannedTokenStoreError {
+    UnexpectedError,
+}

@@ -60,7 +60,7 @@ pub async fn validate_token(
     token: &str,
     banned_token_store: BannedTokenType,
 ) -> Result<Claims, jsonwebtoken::errors::Error> {
-    if banned_token_store.read().await.token_exists(token) {
+    if let Ok(true) = banned_token_store.read().await.token_exists(token).await {
         return Err(jsonwebtoken::errors::Error::from(
             jsonwebtoken::errors::ErrorKind::InvalidToken,
         ));
@@ -95,9 +95,18 @@ pub fn generate_6_digit_code() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::HashsetBannedTokenStore;
+    use crate::get_redis_client;
+    use crate::prelude::RedisBannedTokenStore;
+    use crate::utils::constants::REDIS_HOST_NAME;
     use std::sync::Arc;
     use tokio::sync::RwLock;
+
+    fn configure_redis() -> redis::Connection {
+        get_redis_client(REDIS_HOST_NAME.to_owned())
+            .expect("Failed to get Redis client")
+            .get_connection()
+            .expect("Failed to get Redis connection")
+    }
 
     #[test]
     fn test_6_digit_code_generator() {
@@ -138,9 +147,10 @@ mod tests {
     async fn test_validate_token_with_valid_token() {
         let email = Email::parse("test@example.com").unwrap();
         let token = generate_auth_token(&email).unwrap();
+        let redis_conn = Arc::new(RwLock::new(configure_redis()));
         let result = validate_token(
             &token,
-            Arc::new(RwLock::new(HashsetBannedTokenStore::new())),
+            Arc::new(RwLock::new(RedisBannedTokenStore::new(redis_conn))),
         )
         .await
         .unwrap();
@@ -157,9 +167,10 @@ mod tests {
     #[tokio::test]
     async fn test_validate_token_with_invalid_token() {
         let token = "invalid_token".to_owned();
+        let redis_conn = Arc::new(RwLock::new(configure_redis()));
         let result = validate_token(
             &token,
-            Arc::new(RwLock::new(HashsetBannedTokenStore::new())),
+            Arc::new(RwLock::new(RedisBannedTokenStore::new(redis_conn))),
         )
         .await;
         assert!(result.is_err());

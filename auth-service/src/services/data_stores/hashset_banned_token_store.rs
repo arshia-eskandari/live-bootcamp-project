@@ -1,4 +1,5 @@
 use crate::domain::data_store::BannedTokenStore;
+use crate::domain::error::BannedTokenStoreError;
 use std::collections::HashSet;
 
 #[derive(Clone)]
@@ -6,13 +7,16 @@ pub struct HashsetBannedTokenStore {
     tokens: HashSet<String>,
 }
 
+#[async_trait::async_trait]
 impl BannedTokenStore for HashsetBannedTokenStore {
-    fn add_token(&mut self, token: String) {
+    async fn add_token(&mut self, token: String) -> Result<(), BannedTokenStoreError> {
         self.tokens.insert(token);
+        Ok(())
     }
 
-    fn token_exists(&self, token: &str) -> bool {
-        self.tokens.contains(token)
+    async fn token_exists(&self, token: &str) -> Result<bool, BannedTokenStoreError> {
+        let exists = self.tokens.contains(token);
+        Ok(exists)
     }
 }
 
@@ -34,22 +38,38 @@ impl Default for HashsetBannedTokenStore {
 mod tests {
     use super::*;
 
-    #[test]
-    fn adds_token_correctly() {
+    #[tokio::test]
+    async fn adds_token_correctly() {
         let mut banned_token_store = HashsetBannedTokenStore::new();
 
-        banned_token_store.add_token(String::from("token1234567890"));
-        assert!(banned_token_store.token_exists("token1234567890"));
+        let _ = banned_token_store
+            .add_token(String::from("token1234567890"))
+            .await;
+        assert!(banned_token_store
+            .token_exists("token1234567890")
+            .await
+            .unwrap());
     }
 
-    #[test]
-    fn returns_false_for_nonexisting_token() {
+    #[tokio::test]
+    async fn returns_false_for_nonexisting_token() {
         let mut banned_token_store = HashsetBannedTokenStore::new();
 
-        banned_token_store.add_token(String::from("token123456790"));
-        banned_token_store.add_token(String::from("token1234567901"));
-        banned_token_store.add_token(String::from("token1234567902"));
-        banned_token_store.add_token(String::from("token1234567903"));
-        assert!(!banned_token_store.token_exists("token12345678904"));
+        let _ = banned_token_store
+            .add_token(String::from("token123456790"))
+            .await;
+        let _ = banned_token_store
+            .add_token(String::from("token1234567901"))
+            .await;
+        let _ = banned_token_store
+            .add_token(String::from("token1234567902"))
+            .await;
+        let _ = banned_token_store
+            .add_token(String::from("token1234567903"))
+            .await;
+        assert!(!banned_token_store
+            .token_exists("token12345678904")
+            .await
+            .unwrap());
     }
 }
