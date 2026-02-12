@@ -16,17 +16,17 @@ impl TwoFACodeStore for HashmapTwoFACodeStore {
         login_attempt_id: LoginAttemptId,
         two_fa_code: TwoFACode,
     ) -> Result<(), TwoFACodeStoreError> {
-        if self.two_fa_code_exists(&email).await {
+        if let Ok(true) = self.two_fa_code_exists(&email).await {
             return Err(TwoFACodeStoreError::EmailAlreadyExists);
         }
         self.codes.insert(email, (login_attempt_id, two_fa_code));
         Ok(())
     }
-    async fn two_fa_code_exists(&self, email: &Email) -> bool {
-        self.codes.contains_key(email)
+    async fn two_fa_code_exists(&self, email: &Email) -> Result<bool, TwoFACodeStoreError> {
+        Ok(self.codes.contains_key(email))
     }
     async fn remove_two_fa_code(&mut self, email: &Email) -> Result<(), TwoFACodeStoreError> {
-        if !self.two_fa_code_exists(email).await {
+        if let Ok(false) = self.two_fa_code_exists(email).await {
             return Err(TwoFACodeStoreError::EmailNotFound);
         }
         self.codes.remove(email);
@@ -83,7 +83,7 @@ mod tests {
     async fn test_add_two_fa_code() -> Result<(), TwoFACodeStoreError> {
         let (store, email) = setup_store_and_add_code().await?;
 
-        assert!(store.two_fa_code_exists(&email).await);
+        assert!(store.two_fa_code_exists(&email).await.unwrap());
         Ok(())
     }
 
@@ -110,7 +110,7 @@ mod tests {
 
         store.remove_two_fa_code(&email).await?;
 
-        assert!(!store.two_fa_code_exists(&email).await);
+        assert!(!store.two_fa_code_exists(&email).await.unwrap());
         Ok(())
     }
 
