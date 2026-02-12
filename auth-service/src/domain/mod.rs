@@ -6,6 +6,9 @@ pub mod user;
 
 pub use data_store::{TwoFACodeStore, UserStore};
 pub use email_client::*;
-pub use error::{AuthAPIError, EmailError, PasswordError, TwoFACodeStoreError, UserStoreError};
+pub use error::{
+    AuthAPIError, BannedTokenStoreError, EmailError, PasswordError, TwoFACodeStoreError,
+    UserStoreError,
+};
 pub use types::{Email, HashedPassword, Token};
 pub use user::User;

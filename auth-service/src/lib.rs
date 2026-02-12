@@ -21,7 +21,8 @@ pub mod prelude {
     pub use crate::services::{
         hashmap_two_fa_code_store::HashmapTwoFACodeStore, hashmap_user_store::HashmapUserStore,
         hashset_banned_token_store::HashsetBannedTokenStore, mock_email_client::MockEmailClient,
-        postgres_user_store::PostgresUserStore,
+        postgres_user_store::PostgresUserStore, redis_banned_token_store::RedisBannedTokenStore,
+        redis_two_fa_code_store::RedisTwoFACodeStore,
     };
     pub use crate::ErrorResponse;
 }
@@ -60,4 +61,9 @@ impl IntoResponse for AuthAPIError {
 pub async fn get_postgres_pool(url: &str) -> Result<PgPool, sqlx::Error> {
     // Create a new PostgreSQL connection pool
     PgPoolOptions::new().max_connections(5).connect(url).await
+}
+
+pub fn get_redis_client(redis_hostname: String) -> redis::RedisResult<redis::Client> {
+    let redis_url = format!("redis://{}/", redis_hostname);
+    redis::Client::open(redis_url)
 }

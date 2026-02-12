@@ -79,4 +79,10 @@ pub enum TwoFACodeStoreError {
     EmailNotFound,
     InvalidCredentials,
     UnexpectedError,
+    LoginAttemptIdNotFound,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum BannedTokenStoreError {
+    UnexpectedError,
 }

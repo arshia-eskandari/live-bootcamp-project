@@ -22,7 +22,10 @@ pub async fn logout(
         .map_err(|_| AuthAPIError::InvalidToken)?;
 
     let mut banned_token_store = state.banned_token_store.write().await;
-    banned_token_store.add_token(token);
+    banned_token_store
+        .add_token(token)
+        .await
+        .map_err(|_| AuthAPIError::UnexpectedError)?;
 
     let jar = jar.remove(JWT_COOKIE_NAME);
 
