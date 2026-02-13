@@ -30,7 +30,7 @@ impl Application {
     pub async fn build(app_state: AppState, address: &str) -> Result<Self, Box<dyn Error>> {
         let allowed_origins = [
             "http://localhost:8000".parse()?,
-            "http://[157.230.191.28]:8000".parse()?,
+            "http://157.230.191.28:8000".parse()?,
         ];
 
         let cors = CorsLayer::new()
