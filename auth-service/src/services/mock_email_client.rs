@@ -18,7 +18,7 @@ impl EmailClient for MockEmailClient {
         content: &str,
     ) -> color_eyre::eyre::Result<()> {
         // Our mock email client will simply log the recipient, subject, and content to standard output
-        tracing::debug!(
+        tracing::info!(
             "Sending email to {} with subject: {} and content: {}",
             recipient.as_ref(),
             subject,
