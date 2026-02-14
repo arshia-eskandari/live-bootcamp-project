@@ -3,16 +3,20 @@ use crate::domain::{data_store::BannedTokenStore, Email};
 use crate::prelude::BannedTokenType;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::Utc;
+use color_eyre::eyre::{eyre, Report, Result, WrapErr};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-// Create cookie with a new JWT auth token
-pub fn generate_auth_cookie(email: &Email) -> Result<Cookie<'static>, GenerateTokenError> {
+// Create cookie with a new JWT auth toke
+#[tracing::instrument(skip_all)]
+pub fn generate_auth_cookie(email: &Email) -> Result<Cookie<'static>> {
     let token = generate_auth_token(email)?;
     Ok(create_auth_cookie(token))
 }
 
 // Create cookie and set the value to the passed-in token string
+#[tracing::instrument(skip_all)]
 fn create_auth_cookie(token: String) -> Cookie<'static> {
     let cookie = Cookie::build((JWT_COOKIE_NAME, token))
         .path("/") // apply cookie to all URLs on the server
@@ -23,63 +27,73 @@ fn create_auth_cookie(token: String) -> Cookie<'static> {
     cookie
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum GenerateTokenError {
-    TokenError(jsonwebtoken::errors::Error),
-    UnexpectedError,
+    #[error("token error")]
+    TokenError(#[from] jsonwebtoken::errors::Error),
+
+    #[error("unexpected error")]
+    UnexpectedError(#[from] Report),
 }
 
 // This value determines how long the JWT auth token is valid for
 pub const TOKEN_TTL_SECONDS: i64 = 600; // 10 minutes
 
 // Create JWT auth token
-fn generate_auth_token(email: &Email) -> Result<String, GenerateTokenError> {
+#[tracing::instrument(skip_all)]
+fn generate_auth_token(email: &Email) -> Result<String> {
     let delta = chrono::Duration::try_seconds(TOKEN_TTL_SECONDS)
-        .ok_or(GenerateTokenError::UnexpectedError)?;
+        .ok_or_else(|| Report::msg("TOKEN_TTL_SECONDS out of range for chrono::Duration"))?;
 
-    // Create JWT expiration time
     let exp = Utc::now()
         .checked_add_signed(delta)
-        .ok_or(GenerateTokenError::UnexpectedError)?
+        .ok_or_else(|| Report::msg("failed to compute JWT expiration timestamp (overflow?)"))?
         .timestamp();
 
-    // Cast exp to a usize, which is what Claims expects
     let exp: usize = exp
         .try_into()
-        .map_err(|_| GenerateTokenError::UnexpectedError)?;
+        .map_err(|e| Report::msg(format!("JWT exp timestamp cannot fit into usize: {e}")))?;
 
     let sub = email.as_ref().to_owned();
 
     let claims = Claims { sub, exp };
 
-    create_token(&claims).map_err(GenerateTokenError::TokenError)
+    create_token(&claims).wrap_err("failed to create JWT token")
 }
 
 // Check if JWT auth token is valid by decoding it using the JWT secret
-pub async fn validate_token(
-    token: &str,
-    banned_token_store: BannedTokenType,
-) -> Result<Claims, jsonwebtoken::errors::Error> {
-    if let Ok(true) = banned_token_store.read().await.token_exists(token).await {
-        return Err(jsonwebtoken::errors::Error::from(
-            jsonwebtoken::errors::ErrorKind::InvalidToken,
-        ));
+#[tracing::instrument(skip_all)]
+pub async fn validate_token(token: &str, banned_token_store: BannedTokenType) -> Result<Claims> {
+    let is_banned = banned_token_store
+        .read()
+        .await
+        .token_exists(token)
+        .await
+        .wrap_err("failed to check if token is banned")?;
+
+    if is_banned {
+        return Err(eyre!("invalid token"));
     }
-    decode::<Claims>(
+
+    let data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
         &Validation::default(),
     )
-    .map(|data| data.claims)
+    .wrap_err("failed to decode/verify JWT")?;
+
+    Ok(data.claims)
 }
 
 // Create JWT auth token by encoding claims using the JWT secret
-fn create_token(claims: &Claims) -> Result<String, jsonwebtoken::errors::Error> {
+#[tracing::instrument(skip_all)]
+fn create_token(claims: &Claims) -> Result<String> {
     encode(
         &jsonwebtoken::Header::default(),
         &claims,
         &EncodingKey::from_secret(JWT_SECRET.as_bytes()),
     )
+    .wrap_err("encoding failed")
 }
 
 #[derive(Debug, Serialize, Deserialize)]

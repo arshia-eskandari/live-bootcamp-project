@@ -8,8 +8,10 @@ use crate::{
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_extra::extract::CookieJar;
+use color_eyre::eyre::Report;
 use serde::{Deserialize, Serialize};
 
+#[tracing::instrument(skip_all)]
 pub async fn login(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -35,6 +37,7 @@ pub async fn login(
 }
 
 // New!
+#[tracing::instrument(skip_all)]
 async fn handle_2fa(
     user: &User,
     state: &AppState,
@@ -53,7 +56,7 @@ async fn handle_2fa(
             two_fa_code.clone(),
         )
         .await
-        .map_err(|_| AuthAPIError::UnexpectedError)?;
+        .map_err(|e| AuthAPIError::UnexpectedError(Report::new(e)))?;
 
     let email_client = state.email_client.read().await;
     email_client
@@ -63,7 +66,7 @@ async fn handle_2fa(
             &format!("Your 2FA Code is {}.", two_fa_code.as_ref()),
         )
         .await
-        .map_err(|_| AuthAPIError::UnexpectedError)?;
+        .map_err(|e| AuthAPIError::UnexpectedError(Report::msg(e)))?;
 
     Ok((
         jar,
@@ -78,6 +81,7 @@ async fn handle_2fa(
 }
 
 // New!
+#[tracing::instrument(skip_all)]
 async fn handle_no_2fa(
     user: &User,
     password: &str,

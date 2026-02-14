@@ -1,4 +1,5 @@
 use crate::domain::{Email, HashedPassword, User, UserStore, UserStoreError};
+use color_eyre::eyre::{eyre, Context, Result};
 use sqlx::PgPool;
 
 pub struct PostgresUserStore {
@@ -13,6 +14,7 @@ impl PostgresUserStore {
 
 #[async_trait::async_trait]
 impl UserStore for PostgresUserStore {
+    #[tracing::instrument(name = "Adding user to PostgreSQL", skip_all)]
     async fn add_user(&mut self, user: User) -> Result<(), UserStoreError> {
         let User {
             email,
@@ -31,47 +33,37 @@ impl UserStore for PostgresUserStore {
         )
         .execute(&self.pool)
         .await
-        .map_err(|e| {
-            if let Some(db_err) = e.as_database_error() {
-                if db_err.code().as_deref() == Some("23505") {
-                    return UserStoreError::UserAlreadyExists;
-                }
-            }
-            UserStoreError::UnexpectedError
-        })?;
+        .map_err(|e| UserStoreError::UnexpectedError(e.into()))?;
 
         Ok(())
     }
 
+    #[tracing::instrument(name = "Retrieving user from PostgreSQL", skip_all)]
     async fn get_user(&self, email: &Email) -> Result<User, UserStoreError> {
-        let record = sqlx::query!(
+        sqlx::query!(
             r#"
-                SELECT email, password_hash, requires_2fa
-                FROM users
-                WHERE email = $1
+            SELECT email, password_hash, requires_2fa
+            FROM users
+            WHERE email = $1
             "#,
-            email.as_ref(),
+            email.as_ref()
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await
-        .map_err(|e| {
-            if matches!(e, sqlx::Error::RowNotFound) {
-                UserStoreError::UserNotFound
-            } else {
-                UserStoreError::UnexpectedError
-            }
-        })?;
-
-        Ok(User {
-            email: Email::parse(record.email).map_err(|_| UserStoreError::UnexpectedError)?,
-
-            password: HashedPassword::parse_password_hash(record.password_hash)
-                .map_err(|_| UserStoreError::UnexpectedError)?,
-
-            requires_2fa: record.requires_2fa,
+        .map_err(|e| UserStoreError::UnexpectedError(e.into()))?
+        .map(|row| {
+            Ok(User {
+                email: Email::parse(row.email)
+                    .map_err(|e| UserStoreError::UnexpectedError(eyre!(e)))?,
+                password: HashedPassword::parse_password_hash(row.password_hash)
+                    .map_err(|e| UserStoreError::UnexpectedError(eyre!(e)))?,
+                requires_2fa: row.requires_2fa,
+            })
         })
+        .ok_or(UserStoreError::UserNotFound)?
     }
 
+    #[tracing::instrument(name = "Validating user credentials in PostgreSQL", skip_all)]
     async fn validate_user(&self, email: Email, password: &str) -> Result<(), UserStoreError> {
         let user = self.get_user(&email).await?;
         if user.password.verify_raw_password(password).await.is_err() {

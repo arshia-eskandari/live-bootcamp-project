@@ -1,5 +1,6 @@
 use auth_service::get_postgres_pool;
 use auth_service::get_redis_client;
+use auth_service::init_tracing;
 use auth_service::prelude::{
     AppState, Application, MockEmailClient, PostgresUserStore, RedisBannedTokenStore,
     RedisTwoFACodeStore,
@@ -12,6 +13,8 @@ use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() {
+    color_eyre::install().expect("Failed to install color_eyre");
+    init_tracing().expect("Failed to initialize tracing");
     let pg_pool = configure_postgresql().await;
     let redis_conn = Arc::new(RwLock::new(configure_redis()));
     let user_store = PostgresUserStore::new(pg_pool);

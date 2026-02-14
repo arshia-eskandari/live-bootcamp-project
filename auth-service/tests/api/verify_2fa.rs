@@ -65,7 +65,7 @@ async fn should_return_401_if_incorrect_credentials() {
     let response = app.post_verify_2fa(&test_case).await;
     assert_eq!(
         response.status().as_u16(),
-        400,
+        401,
         "Failed for input: {:?}",
         test_case
     );
@@ -94,7 +94,7 @@ async fn should_return_401_if_old_code() {
     let response = app.post_verify_2fa(&test_case).await;
     assert_eq!(
         response.status().as_u16(),
-        400,
+        401,
         "Failed for input: {:?}",
         test_case
     );
