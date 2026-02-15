@@ -9,6 +9,7 @@ use crate::{
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_extra::extract::CookieJar;
 use color_eyre::eyre::Report;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 #[tracing::instrument(skip_all)]
@@ -17,9 +18,10 @@ pub async fn login(
     jar: CookieJar,
     Json(request): Json<LoginRequest>,
 ) -> Result<(CookieJar, impl IntoResponse), AuthAPIError> {
-    let email = Email::parse(request.email).map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let email = Email::parse(request.email.expose_secret())
+        .map_err(|_| AuthAPIError::InvalidCredentials)?;
     let raw_password = request.password;
-    HashedPassword::parse(&raw_password)
+    HashedPassword::parse(raw_password.clone())
         .await
         .map_err(|_| AuthAPIError::InvalidCredentials)?;
 
@@ -84,7 +86,7 @@ async fn handle_2fa(
 #[tracing::instrument(skip_all)]
 async fn handle_no_2fa(
     user: &User,
-    password: &str,
+    password: &SecretString,
     jar: CookieJar,
 ) -> Result<(CookieJar, (StatusCode, Json<LoginResponse>)), AuthAPIError> {
     if user.password.verify_raw_password(password).await.is_err() {
@@ -118,6 +120,6 @@ pub struct TwoFactorAuthResponse {
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
-    pub email: String,
-    pub password: String,
+    pub email: SecretString,
+    pub password: SecretString,
 }

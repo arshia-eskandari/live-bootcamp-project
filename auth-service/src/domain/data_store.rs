@@ -2,12 +2,17 @@ use super::error::BannedTokenStoreError;
 use super::error::{TwoFACodeStoreError, UserStoreError};
 use super::types::{Email, LoginAttemptId, TwoFACode};
 use super::User;
+use secrecy::SecretString;
 
 #[async_trait::async_trait]
 pub trait UserStore {
     async fn add_user(&mut self, user: User) -> Result<(), UserStoreError>;
     async fn get_user(&self, email: &Email) -> Result<User, UserStoreError>;
-    async fn validate_user(&self, email: Email, password: &str) -> Result<(), UserStoreError>;
+    async fn validate_user(
+        &self,
+        email: Email,
+        password: &SecretString,
+    ) -> Result<(), UserStoreError>;
 }
 
 #[async_trait::async_trait]

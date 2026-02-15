@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-
 use crate::domain::{Email, User, UserStore, UserStoreError};
+use secrecy::SecretString;
+use std::collections::HashMap;
 
 pub struct HashmapUserStore {
     users: HashMap<Email, User>,
@@ -39,7 +39,11 @@ impl UserStore for HashmapUserStore {
             .ok_or(UserStoreError::UserNotFound)
     }
 
-    async fn validate_user(&self, email: Email, password: &str) -> Result<(), UserStoreError> {
+    async fn validate_user(
+        &self,
+        email: Email,
+        password: &SecretString,
+    ) -> Result<(), UserStoreError> {
         let user = self.get_user(&email).await?;
         if user.password.verify_raw_password(password).await.is_err() {
             return Err(UserStoreError::InvalidCredentials);
@@ -52,16 +56,21 @@ impl UserStore for HashmapUserStore {
 mod tests {
     use super::*;
     use crate::domain::HashedPassword;
+    use secrecy::SecretString;
 
     async fn setup_store_and_get_user() -> Result<(HashmapUserStore, User), UserStoreError> {
         let mut store = HashmapUserStore::new();
+
+        let password = SecretString::new("123DSDFdasd@@456789".to_owned().into_boxed_str());
+
         store
             .add_user(User::new(
                 Email::parse("test@example.com").unwrap(),
-                HashedPassword::parse("123DSDFdasd@@456789").await.unwrap(),
+                HashedPassword::parse(password).await.unwrap(),
                 false,
             ))
             .await?;
+
         let user = store
             .get_user(&Email::parse("test@example.com").unwrap())
             .await?;
@@ -73,12 +82,12 @@ mod tests {
     async fn test_add_user() -> Result<(), UserStoreError> {
         let (store, store_user) = setup_store_and_get_user().await?;
 
+        let password = SecretString::new("123DSDFdasd@@456789".to_owned().into_boxed_str());
+
         store
-            .validate_user(
-                Email::parse("test@example.com").unwrap(),
-                "123DSDFdasd@@456789",
-            )
+            .validate_user(Email::parse("test@example.com").unwrap(), &password)
             .await?;
+
         assert!(!store_user.requires_2fa);
 
         Ok(())
@@ -87,7 +96,6 @@ mod tests {
     #[tokio::test]
     async fn test_get_user() -> Result<(), UserStoreError> {
         setup_store_and_get_user().await?;
-
         Ok(())
     }
 
@@ -95,11 +103,10 @@ mod tests {
     async fn test_validate_user() -> Result<(), UserStoreError> {
         let (store, _) = setup_store_and_get_user().await?;
 
+        let password = SecretString::new("123DSDFdasd@@456789".to_owned().into_boxed_str());
+
         store
-            .validate_user(
-                Email::parse("test@example.com").unwrap(),
-                "123DSDFdasd@@456789",
-            )
+            .validate_user(Email::parse("test@example.com").unwrap(), &password)
             .await?;
 
         Ok(())
