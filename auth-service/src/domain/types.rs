@@ -108,34 +108,44 @@ impl AsRef<str> for Token {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LoginAttemptId(pub String);
+#[derive(Debug, Clone)]
+pub struct LoginAttemptId(pub SecretString);
 
 impl LoginAttemptId {
-    pub fn parse(login_attempt_id: impl AsRef<str>) -> Result<Self> {
-        let login_attempt_id = login_attempt_id.as_ref();
+    pub fn parse(login_attempt_id: SecretString) -> Result<Self> {
+        let login_attempt_id = login_attempt_id.expose_secret().trim();
         if login_attempt_id.is_empty() {
             return Err(LoginAttemptIdError::Empty.into());
         }
         let login_attempt_id =
             uuid::Uuid::parse_str(login_attempt_id).wrap_err("Invalid login attempt id")?;
 
-        Ok(LoginAttemptId(login_attempt_id.to_string()))
+        Ok(LoginAttemptId(SecretString::new(
+            login_attempt_id.to_string().to_owned().into_boxed_str(),
+        )))
     }
 }
 
-impl AsRef<str> for LoginAttemptId {
-    fn as_ref(&self) -> &str {
+impl PartialEq for LoginAttemptId {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Eq for LoginAttemptId {}
+
+impl AsRef<SecretString> for LoginAttemptId {
+    fn as_ref(&self) -> &SecretString {
         &self.0
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TwoFACode(pub String);
+#[derive(Debug, Clone)]
+pub struct TwoFACode(pub SecretString);
 
 impl TwoFACode {
-    pub fn parse(two_fa_code: impl AsRef<str>) -> Result<Self> {
-        let two_fa_code = two_fa_code.as_ref();
+    pub fn parse(two_fa_code: SecretString) -> Result<Self> {
+        let two_fa_code = two_fa_code.expose_secret().trim();
         if two_fa_code.is_empty() {
             return Err(TwoFACodeError::Empty.into());
         }
@@ -143,15 +153,25 @@ impl TwoFACode {
         let code_as_u32 = two_fa_code.parse::<u32>().wrap_err("Invalid 2FA code")?;
 
         if (100_000..=999_999).contains(&code_as_u32) {
-            Ok(TwoFACode(two_fa_code.to_string()))
+            Ok(TwoFACode(SecretString::new(
+                two_fa_code.to_string().to_owned().into_boxed_str(),
+            )))
         } else {
             Err(eyre!("Invalid 2FA code")) // Updated!
         }
     }
 }
 
-impl AsRef<str> for TwoFACode {
-    fn as_ref(&self) -> &str {
+impl PartialEq for TwoFACode {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Eq for TwoFACode {}
+
+impl AsRef<SecretString> for TwoFACode {
+    fn as_ref(&self) -> &SecretString {
         &self.0
     }
 }
@@ -262,17 +282,22 @@ mod tests {
 
     #[test]
     fn test_two_fa_code_parsing() {
-        let is_valid_two_fa_code = TwoFACode::parse("123456").is_ok();
-        let err = TwoFACode::parse("").unwrap_err();
+        let is_valid_two_fa_code =
+            TwoFACode::parse(SecretString::new("123456".to_owned().into_boxed_str())).is_ok();
+        let err = TwoFACode::parse(SecretString::new("".to_owned().into_boxed_str())).unwrap_err();
         assert!(err.to_string().contains("empty"));
         assert!(is_valid_two_fa_code)
     }
 
     #[test]
     fn test_login_attempt_id_parsing() {
-        let is_valid_login_attempt_id =
-            LoginAttemptId::parse("550e8400-e29b-41d4-a716-446655440000").is_ok();
-        let err = TwoFACode::parse("").unwrap_err();
+        let is_valid_login_attempt_id = LoginAttemptId::parse(SecretString::new(
+            "550e8400-e29b-41d4-a716-446655440000"
+                .to_owned()
+                .into_boxed_str(),
+        ))
+        .is_ok();
+        let err = TwoFACode::parse(SecretString::new("".to_owned().into_boxed_str())).unwrap_err();
         assert!(err.to_string().contains("empty"));
 
         assert!(is_valid_login_attempt_id)

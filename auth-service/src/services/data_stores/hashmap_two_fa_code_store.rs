@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::domain::data_store::TwoFACodeStore;
 use crate::domain::error::TwoFACodeStoreError;
 use crate::domain::types::{Email, LoginAttemptId, TwoFACode};
-use secrecy::SecretString;
 
 pub struct HashmapTwoFACodeStore {
     codes: HashMap<Email, (LoginAttemptId, TwoFACode)>,
@@ -63,6 +62,7 @@ impl Default for HashmapTwoFACodeStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use secrecy::SecretString;
     use uuid::Uuid;
 
     async fn setup_store_and_add_code(
@@ -73,8 +73,12 @@ mod tests {
             "test@example.com".to_owned().into_boxed_str(),
         ))
         .unwrap();
-        let login_attempt_id = LoginAttemptId::parse(Uuid::new_v4().to_string()).unwrap();
-        let two_fa_code = TwoFACode::parse("123456").unwrap();
+        let login_attempt_id = LoginAttemptId::parse(SecretString::new(
+            Uuid::new_v4().to_string().into_boxed_str(),
+        ))
+        .unwrap();
+        let two_fa_code =
+            TwoFACode::parse(SecretString::new("123456".to_owned().into_boxed_str())).unwrap();
 
         store
             .add_two_fa_code(email.clone(), login_attempt_id, two_fa_code)
@@ -96,8 +100,12 @@ mod tests {
     ) -> Result<(), TwoFACodeStoreError> {
         let (mut store, email) = setup_store_and_add_code().await?;
 
-        let login_attempt_id = LoginAttemptId::parse(Uuid::new_v4().to_string()).unwrap();
-        let two_fa_code = TwoFACode::parse("654321").unwrap();
+        let login_attempt_id = LoginAttemptId::parse(SecretString::new(
+            Uuid::new_v4().to_string().into_boxed_str(),
+        ))
+        .unwrap();
+        let two_fa_code =
+            TwoFACode::parse(SecretString::new("654321".to_owned().into_boxed_str())).unwrap();
 
         let err = store
             .add_two_fa_code(email.clone(), login_attempt_id, two_fa_code)

@@ -5,6 +5,7 @@ use crate::domain::error::BannedTokenStoreError;
 use crate::utils::auth::TOKEN_TTL_SECONDS;
 use color_eyre::eyre::Report;
 use redis::{Commands, Connection};
+use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::RwLock;
 
 pub struct RedisBannedTokenStore {
@@ -20,12 +21,12 @@ impl RedisBannedTokenStore {
 #[async_trait::async_trait]
 impl BannedTokenStore for RedisBannedTokenStore {
     #[tracing::instrument(skip_all)]
-    async fn add_token(&mut self, token: String) -> Result<(), BannedTokenStoreError> {
+    async fn add_token(&mut self, token: SecretString) -> Result<(), BannedTokenStoreError> {
         let ttl: u64 = TOKEN_TTL_SECONDS
             .try_into()
             .map_err(|e| BannedTokenStoreError::UnexpectedError(Report::new(e)))?;
 
-        let key = get_key(&token);
+        let key = get_key(token.expose_secret());
 
         let mut connection = self.conn.write().await;
 
@@ -36,8 +37,8 @@ impl BannedTokenStore for RedisBannedTokenStore {
     }
 
     #[tracing::instrument(skip_all)]
-    async fn token_exists(&self, token: &str) -> Result<bool, BannedTokenStoreError> {
-        let key = get_key(token);
+    async fn token_exists(&self, token: &SecretString) -> Result<bool, BannedTokenStoreError> {
+        let key = get_key(token.expose_secret());
 
         let mut connection = self.conn.write().await;
 

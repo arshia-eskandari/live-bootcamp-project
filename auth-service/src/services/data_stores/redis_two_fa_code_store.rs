@@ -4,7 +4,7 @@ use crate::domain::{
 };
 use color_eyre::eyre::Report;
 use redis::{Commands, Connection};
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::to_string;
 use std::sync::Arc;
@@ -31,8 +31,8 @@ impl TwoFACodeStore for RedisTwoFACodeStore {
     ) -> Result<(), TwoFACodeStoreError> {
         let key = get_key(&email);
         let two_fa_code = TwoFATuple(
-            login_attempt_id.as_ref().to_string(),
-            code.as_ref().to_string(),
+            login_attempt_id.as_ref().expose_secret().to_string(),
+            code.as_ref().expose_secret().to_string(),
         );
         let two_fa_code_json = to_string(&two_fa_code)
             .map_err(|e| TwoFACodeStoreError::UnexpectedError(Report::new(e)))?;
@@ -73,8 +73,10 @@ impl TwoFACodeStore for RedisTwoFACodeStore {
             .map_err(|e| TwoFACodeStoreError::UnexpectedError(Report::new(e)))?;
 
         let login_attempt_id =
-            LoginAttemptId::parse(tuple.0).map_err(TwoFACodeStoreError::UnexpectedError)?;
-        let code = TwoFACode::parse(tuple.1).map_err(TwoFACodeStoreError::UnexpectedError)?;
+            LoginAttemptId::parse(SecretString::new(tuple.0.to_owned().into_boxed_str()))
+                .map_err(TwoFACodeStoreError::UnexpectedError)?;
+        let code = TwoFACode::parse(SecretString::new(tuple.1.to_owned().into_boxed_str()))
+            .map_err(TwoFACodeStoreError::UnexpectedError)?;
         Ok((login_attempt_id, code))
     }
 

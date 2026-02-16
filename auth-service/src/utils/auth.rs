@@ -5,7 +5,8 @@ use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::Utc;
 use color_eyre::eyre::{eyre, Report, Result, WrapErr};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Validation};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::ExposeSecret;
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -68,7 +69,7 @@ pub async fn validate_token(token: &str, banned_token_store: BannedTokenType) ->
     let is_banned = banned_token_store
         .read()
         .await
-        .token_exists(token)
+        .token_exists(&SecretString::new(token.to_owned().into_boxed_str()))
         .await
         .wrap_err("failed to check if token is banned")?;
 
@@ -78,7 +79,7 @@ pub async fn validate_token(token: &str, banned_token_store: BannedTokenType) ->
 
     let data = decode::<Claims>(
         token,
-        &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
+        &DecodingKey::from_secret(JWT_SECRET.expose_secret().as_bytes()),
         &Validation::default(),
     )
     .wrap_err("failed to decode/verify JWT")?;
@@ -92,7 +93,7 @@ fn create_token(claims: &Claims) -> Result<String> {
     encode(
         &jsonwebtoken::Header::default(),
         &claims,
-        &EncodingKey::from_secret(JWT_SECRET.as_bytes()),
+        &EncodingKey::from_secret(JWT_SECRET.expose_secret().as_bytes()),
     )
     .wrap_err("encoding failed")
 }
@@ -113,6 +114,7 @@ mod tests {
     use crate::get_redis_client;
     use crate::prelude::RedisBannedTokenStore;
     use crate::utils::constants::REDIS_HOST_NAME;
+    use secrecy::SecretString;
     use std::sync::Arc;
     use tokio::sync::RwLock;
 

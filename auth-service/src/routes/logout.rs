@@ -7,6 +7,7 @@ use crate::{
 use axum::{extract::State, http::StatusCode, response::IntoResponse};
 use axum_extra::extract::CookieJar;
 use color_eyre::eyre::Report;
+use secrecy::SecretString;
 
 #[tracing::instrument(skip_all)]
 pub async fn logout(
@@ -25,7 +26,7 @@ pub async fn logout(
 
     let mut banned_token_store = state.banned_token_store.write().await;
     banned_token_store
-        .add_token(token)
+        .add_token(SecretString::new(token.into_boxed_str()))
         .await
         .map_err(|e| AuthAPIError::UnexpectedError(Report::new(e)))?;
 

@@ -17,10 +17,12 @@ pub async fn verify_2fa(
     Json(request): Json<Verify2FARequest>,
 ) -> Result<(CookieJar, (StatusCode, Json<Verify2FAResponse>)), AuthAPIError> {
     let email = Email::parse(request.email).map_err(|_| AuthAPIError::InvalidCredentials)?;
-    let login_attempt_id = LoginAttemptId::parse(request.login_attempt_id)
+    let login_attempt_id = LoginAttemptId::parse(SecretString::new(
+        request.login_attempt_id.to_owned().into_boxed_str(),
+    ))
+    .map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let two_fa_code = TwoFACode::parse(SecretString::new(request.two_fa_code.into_boxed_str()))
         .map_err(|_| AuthAPIError::InvalidCredentials)?;
-    let two_fa_code =
-        TwoFACode::parse(request.two_fa_code).map_err(|_| AuthAPIError::InvalidCredentials)?;
 
     let mut two_fa_code_store = state.two_fa_code_store.write().await;
 

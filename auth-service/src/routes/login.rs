@@ -9,7 +9,7 @@ use crate::{
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_extra::extract::CookieJar;
 use color_eyre::eyre::Report;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 #[tracing::instrument(skip_all)]
@@ -44,10 +44,14 @@ async fn handle_2fa(
     state: &AppState,
     jar: CookieJar,
 ) -> Result<(CookieJar, (StatusCode, Json<LoginResponse>)), AuthAPIError> {
-    let login_attempt_id = LoginAttemptId::parse(uuid::Uuid::new_v4().to_string())
-        .map_err(|_| AuthAPIError::InvalidCredentials)?;
-    let two_fa_code = TwoFACode::parse(generate_6_digit_code().to_string())
-        .map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let login_attempt_id = LoginAttemptId::parse(SecretString::new(
+        uuid::Uuid::new_v4().to_string().to_owned().into_boxed_str(),
+    ))
+    .map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let two_fa_code = TwoFACode::parse(SecretString::new(
+        generate_6_digit_code().to_string().into_boxed_str(),
+    ))
+    .map_err(|_| AuthAPIError::InvalidCredentials)?;
 
     let mut two_fa_code_store = state.two_fa_code_store.write().await;
     two_fa_code_store
@@ -64,7 +68,7 @@ async fn handle_2fa(
         .send_email(
             &user.email,
             "Your 2FA Code",
-            &format!("Your 2FA Code is {}.", two_fa_code.as_ref()),
+            &format!("Your 2FA Code is {}.", two_fa_code.as_ref().expose_secret()),
         )
         .await
         .map_err(|e| AuthAPIError::UnexpectedError(Report::msg(e)))?;
@@ -75,7 +79,7 @@ async fn handle_2fa(
             StatusCode::PARTIAL_CONTENT,
             Json(LoginResponse::TwoFactorAuth(TwoFactorAuthResponse {
                 message: "2FA required".to_string(),
-                login_attempt_id: login_attempt_id.as_ref().to_owned(),
+                login_attempt_id: login_attempt_id.as_ref().expose_secret().to_string(),
             })),
         ),
     ))
