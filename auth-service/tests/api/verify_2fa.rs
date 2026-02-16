@@ -2,6 +2,7 @@ use crate::helpers::{get_random_email, TestApp};
 use auth_macros::db_test;
 use auth_service::domain::types::{Email, LoginAttemptId, TwoFACode};
 use auth_service::domain::TwoFACodeStore;
+use secrecy::{ExposeSecret, SecretString};
 
 #[db_test]
 async fn should_return_422_if_malformed_input() {
@@ -65,7 +66,7 @@ async fn should_return_401_if_incorrect_credentials() {
     let response = app.post_verify_2fa(&test_case).await;
     assert_eq!(
         response.status().as_u16(),
-        400,
+        401,
         "Failed for input: {:?}",
         test_case
     );
@@ -73,9 +74,15 @@ async fn should_return_401_if_incorrect_credentials() {
 
 #[db_test]
 async fn should_return_401_if_old_code() {
-    let random_email = Email::parse(get_random_email()).unwrap();
-    let login_attempt_id = LoginAttemptId::parse("c9a2865b-467d-498b-93b8-634903ae68e0").unwrap();
-    let two_fa_code = TwoFACode::parse("123456").unwrap();
+    let random_email = Email::parse(get_random_email().into()).unwrap();
+    let login_attempt_id = LoginAttemptId::parse(SecretString::new(
+        "c9a2865b-467d-498b-93b8-634903ae68e0"
+            .to_owned()
+            .into_boxed_str(),
+    ))
+    .unwrap();
+    let two_fa_code =
+        TwoFACode::parse(SecretString::new("123456".to_owned().into_boxed_str())).unwrap();
 
     app.two_fa_code_store
         .write()
@@ -85,7 +92,7 @@ async fn should_return_401_if_old_code() {
         .unwrap();
 
     let test_case = serde_json::json!({
-        "email": random_email.as_ref(),
+        "email": random_email.as_ref().expose_secret(),
         "loginAttemptId": "c9a2865b-467d-498b-93b8-634903ae68e0",
         "2FACode": "123456"
     });
@@ -94,7 +101,7 @@ async fn should_return_401_if_old_code() {
     let response = app.post_verify_2fa(&test_case).await;
     assert_eq!(
         response.status().as_u16(),
-        400,
+        401,
         "Failed for input: {:?}",
         test_case
     );
@@ -102,9 +109,15 @@ async fn should_return_401_if_old_code() {
 
 #[db_test]
 async fn should_return_200_if_correct_code() {
-    let random_email = Email::parse(get_random_email()).unwrap();
-    let login_attempt_id = LoginAttemptId::parse("c9a2865b-467d-498b-93b8-634903ae68e0").unwrap();
-    let two_fa_code = TwoFACode::parse("123456").unwrap();
+    let random_email = Email::parse(get_random_email().into()).unwrap();
+    let login_attempt_id = LoginAttemptId::parse(SecretString::new(
+        "c9a2865b-467d-498b-93b8-634903ae68e0"
+            .to_owned()
+            .into_boxed_str(),
+    ))
+    .unwrap();
+    let two_fa_code =
+        TwoFACode::parse(SecretString::new("123456".to_owned().into_boxed_str())).unwrap();
 
     app.two_fa_code_store
         .write()
@@ -114,7 +127,7 @@ async fn should_return_200_if_correct_code() {
         .unwrap();
 
     let test_case = serde_json::json!({
-        "email": random_email.as_ref(),
+        "email": random_email.as_ref().expose_secret(),
         "loginAttemptId": "c9a2865b-467d-498b-93b8-634903ae68e0",
         "2FACode": "123456"
     });

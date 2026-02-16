@@ -129,6 +129,7 @@ jobs:
           export JWT_SECRET=${{ secrets.JWT_SECRET }}
           export AUTH_SERVICE_IP=${{ vars.DROPLET_IP }}
           export DATABASE_URL="postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@db:5432"
+          export POSTMARK_AUTH_TOKEN=${{ secrets.POSTMARK_AUTH_TOKEN }}
           docker compose down
           docker compose pull
           docker compose up -d

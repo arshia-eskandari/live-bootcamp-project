@@ -3,34 +3,36 @@ use argon2::{
     password_hash::{rand_core::OsRng, SaltString},
     Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version,
 };
-use std::error::Error;
+use color_eyre::eyre::{eyre, Context, Report, Result};
+use secrecy::{ExposeSecret, SecretString};
+use std::hash::Hash;
 use validator::ValidateEmail;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Password(pub String);
 
 impl Password {
-    pub fn parse(password: impl AsRef<str>) -> Result<Self, PasswordError> {
+    pub fn parse(password: impl AsRef<str>) -> Result<Self> {
         let password = password.as_ref();
         if password.is_empty() {
-            return Err(PasswordError::Empty);
+            return Err(PasswordError::Empty.into());
         } else if !password.is_ascii() {
-            return Err(PasswordError::IsNotASCII);
+            return Err(PasswordError::IsNotASCII.into());
         } else if password.contains([' ', '\t', '\n', '\r']) {
-            return Err(PasswordError::IncludesSpaces);
+            return Err(PasswordError::IncludesSpaces.into());
         } else if password.len() < 8 {
-            return Err(PasswordError::ShortLength);
+            return Err(PasswordError::ShortLength.into());
         } else if !password.chars().any(|c| c.is_ascii_uppercase()) {
-            return Err(PasswordError::MissingCapitalLetter);
+            return Err(PasswordError::MissingCapitalLetter.into());
         } else if !password.chars().any(|c| c.is_ascii_lowercase()) {
-            return Err(PasswordError::MissingLowercaseLetter);
+            return Err(PasswordError::MissingLowercaseLetter.into());
         } else if !password.chars().any(|c| c.is_ascii_digit()) {
-            return Err(PasswordError::MissingNumber);
+            return Err(PasswordError::MissingNumber.into());
         } else if !password
             .chars()
             .any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c))
         {
-            return Err(PasswordError::MissingSymbol);
+            return Err(PasswordError::MissingSymbol.into());
         }
 
         Ok(Password(password.to_string()))
@@ -43,29 +45,45 @@ impl AsRef<str> for Password {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Email(pub String);
+#[derive(Debug, Clone)]
+pub struct Email(pub SecretString);
 
 impl Email {
-    pub fn parse(email: impl AsRef<str>) -> Result<Self, EmailError> {
-        let email = email.as_ref().trim();
+    pub fn parse(email: SecretString) -> Result<Self, EmailError> {
+        let email_exposed = email.expose_secret().trim();
 
-        if email.is_empty() {
+        if email_exposed.is_empty() {
             return Err(EmailError::Empty);
         }
-        if !email.contains('@') {
+        if !email_exposed.contains('@') {
             return Err(EmailError::MissingAtSymbol);
         }
-        if !ValidateEmail::validate_email(&email) {
+        if !ValidateEmail::validate_email(&email_exposed) {
             return Err(EmailError::InvalidFormat);
         }
 
-        Ok(Email(email.to_string()))
+        Ok(Email(SecretString::new(
+            email_exposed.to_owned().into_boxed_str(),
+        )))
     }
 }
 
-impl AsRef<str> for Email {
-    fn as_ref(&self) -> &str {
+impl PartialEq for Email {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Hash for Email {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.expose_secret().hash(state);
+    }
+}
+
+impl Eq for Email {}
+
+impl AsRef<SecretString> for Email {
+    fn as_ref(&self) -> &SecretString {
         &self.0
     }
 }
@@ -90,109 +108,158 @@ impl AsRef<str> for Token {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LoginAttemptId(pub String);
+#[derive(Debug, Clone)]
+pub struct LoginAttemptId(pub SecretString);
 
 impl LoginAttemptId {
-    pub fn parse(login_attempt_id: impl AsRef<str>) -> Result<Self, LoginAttemptIdError> {
-        let login_attempt_id = login_attempt_id.as_ref();
+    pub fn parse(login_attempt_id: SecretString) -> Result<Self> {
+        let login_attempt_id = login_attempt_id.expose_secret().trim();
         if login_attempt_id.is_empty() {
-            return Err(LoginAttemptIdError::Empty);
+            return Err(LoginAttemptIdError::Empty.into());
         }
+        let login_attempt_id =
+            uuid::Uuid::parse_str(login_attempt_id).wrap_err("Invalid login attempt id")?;
 
-        Ok(LoginAttemptId(login_attempt_id.to_string()))
+        Ok(LoginAttemptId(SecretString::new(
+            login_attempt_id.to_string().to_owned().into_boxed_str(),
+        )))
     }
 }
 
-impl AsRef<str> for LoginAttemptId {
-    fn as_ref(&self) -> &str {
+impl PartialEq for LoginAttemptId {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Eq for LoginAttemptId {}
+
+impl AsRef<SecretString> for LoginAttemptId {
+    fn as_ref(&self) -> &SecretString {
         &self.0
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TwoFACode(pub String);
+#[derive(Debug, Clone)]
+pub struct TwoFACode(pub SecretString);
 
 impl TwoFACode {
-    pub fn parse(two_fa_code: impl AsRef<str>) -> Result<Self, TwoFACodeError> {
-        let two_fa_code = two_fa_code.as_ref();
+    pub fn parse(two_fa_code: SecretString) -> Result<Self> {
+        let two_fa_code = two_fa_code.expose_secret().trim();
         if two_fa_code.is_empty() {
-            return Err(TwoFACodeError::Empty);
+            return Err(TwoFACodeError::Empty.into());
         }
 
-        Ok(TwoFACode(two_fa_code.to_string()))
+        let code_as_u32 = two_fa_code.parse::<u32>().wrap_err("Invalid 2FA code")?;
+
+        if (100_000..=999_999).contains(&code_as_u32) {
+            Ok(TwoFACode(SecretString::new(
+                two_fa_code.to_string().to_owned().into_boxed_str(),
+            )))
+        } else {
+            Err(eyre!("Invalid 2FA code")) // Updated!
+        }
     }
 }
 
-impl AsRef<str> for TwoFACode {
-    fn as_ref(&self) -> &str {
+impl PartialEq for TwoFACode {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Eq for TwoFACode {}
+
+impl AsRef<SecretString> for TwoFACode {
+    fn as_ref(&self) -> &SecretString {
         &self.0
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct HashedPassword(String);
+#[derive(Debug, Clone)]
+pub struct HashedPassword(SecretString);
 
-impl HashedPassword {
-    pub async fn parse(s: impl AsRef<str>) -> Result<Self, String> {
-        Password::parse(&s).map_err(|e| format!("{e}"))?;
-
-        let hash = compute_password_hash(s.as_ref())
-            .await
-            .map_err(|e| e.to_string())?;
-
-        HashedPassword::parse_password_hash(hash)
-    }
-
-    pub fn parse_password_hash(hash: String) -> Result<HashedPassword, String> {
-        PasswordHash::new(&hash).map_err(|e| e.to_string())?;
-        Ok(HashedPassword(hash))
-    }
-
-    pub async fn verify_raw_password(
-        &self,
-        password_candidate: &str,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let password_hash_str = self.as_ref().to_owned();
-        let password_candidate = password_candidate.to_owned();
-
-        tokio::task::spawn_blocking(move || -> Result<(), Box<dyn Error + Send + Sync>> {
-            let parsed_hash = PasswordHash::new(&password_hash_str)?;
-
-            Argon2::default()
-                .verify_password(password_candidate.as_bytes(), &parsed_hash)
-                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
-        })
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?
+impl PartialEq for HashedPassword {
+    // New!
+    fn eq(&self, other: &Self) -> bool {
+        // We can use the expose_secret method to expose the SecretString
+        // in a controlled manner when needed!
+        self.0.expose_secret() == other.0.expose_secret() // Updated!
     }
 }
 
-async fn compute_password_hash(password: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
-    let password = password.to_owned();
+impl HashedPassword {
+    #[tracing::instrument(name = "Verify raw password", skip_all)]
+    pub async fn parse(password: SecretString) -> Result<Self> {
+        Password::parse(password.expose_secret())
+            .map_err(|e| Report::msg(e.to_string()))
+            .wrap_err("Invalid password")?;
 
-    let hash =
-        tokio::task::spawn_blocking(move || -> Result<String, Box<dyn Error + Send + Sync>> {
-            let salt = SaltString::generate(&mut OsRng);
+        let hash = compute_password_hash(&password)
+            .await
+            .wrap_err("Failed to compute password hash")?;
 
+        HashedPassword::parse_password_hash(hash).wrap_err("Failed to parse password hash")
+    }
+
+    pub fn parse_password_hash(hash: SecretString) -> Result<HashedPassword> {
+        if let Ok(hashed_string) = PasswordHash::new(hash.expose_secret()) {
+            Ok(Self(SecretString::new(
+                hashed_string.to_string().into_boxed_str(),
+            )))
+        } else {
+            Err(eyre!("Failed to parse string to a HashedPassword type"))
+        }
+    }
+
+    #[tracing::instrument(name = "Verify password hash", skip_all)]
+    pub async fn verify_raw_password(&self, password_candidate: &SecretString) -> Result<()> {
+        let current_span = tracing::Span::current();
+
+        let password_hash = self.as_ref().expose_secret().to_owned();
+        let password_candidate = password_candidate.expose_secret().to_owned();
+
+        tokio::task::spawn_blocking(move || {
+            current_span.in_scope(|| {
+                let expected_password_hash =
+                    PasswordHash::new(&password_hash).wrap_err("Failed to parse password hash")?;
+
+                Argon2::default()
+                    .verify_password(password_candidate.as_bytes(), &expected_password_hash)
+                    .wrap_err("failed to verify password hash")
+            })
+        })
+        .await
+        .wrap_err("Password verification task panicked or was cancelled")?
+    }
+}
+
+#[tracing::instrument(name = "Computing password hash", skip_all)]
+async fn compute_password_hash(password: &SecretString) -> Result<SecretString> {
+    let current_span: tracing::Span = tracing::Span::current();
+
+    let password = password.expose_secret().to_owned();
+    let result = tokio::task::spawn_blocking(move || {
+        current_span.in_scope(|| {
+            let salt: SaltString = SaltString::generate(&mut OsRng);
             let password_hash = Argon2::new(
                 Algorithm::Argon2id,
                 Version::V0x13,
-                Params::new(1024, 2, 1, None)?,
+                Params::new(15000, 2, 1, None)?,
             )
             .hash_password(password.as_bytes(), &salt)?
             .to_string();
 
-            Ok(password_hash)
+            Ok(SecretString::new(password_hash.into_boxed_str()))
         })
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)??;
+    })
+    .await?;
 
-    Ok(hash)
+    result
 }
 
-impl AsRef<str> for HashedPassword {
-    fn as_ref(&self) -> &str {
+impl AsRef<SecretString> for HashedPassword {
+    fn as_ref(&self) -> &SecretString {
         &self.0
     }
 }
@@ -215,19 +282,25 @@ mod tests {
 
     #[test]
     fn test_two_fa_code_parsing() {
-        let is_valid_two_fa_code = TwoFACode::parse("8J38J1E09J3E48H7502J8D").is_ok();
-        let is_invalid_two_fa_code = TwoFACode::parse("") == Err(TwoFACodeError::Empty);
-
-        assert!(is_valid_two_fa_code && is_invalid_two_fa_code)
+        let is_valid_two_fa_code =
+            TwoFACode::parse(SecretString::new("123456".to_owned().into_boxed_str())).is_ok();
+        let err = TwoFACode::parse(SecretString::new("".to_owned().into_boxed_str())).unwrap_err();
+        assert!(err.to_string().contains("empty"));
+        assert!(is_valid_two_fa_code)
     }
 
     #[test]
     fn test_login_attempt_id_parsing() {
-        let is_valid_login_attempt_id = LoginAttemptId::parse("8J38J1E09J3E48H7502J8D").is_ok();
-        let is_invalid_login_attempt_id =
-            LoginAttemptId::parse("") == Err(LoginAttemptIdError::Empty);
+        let is_valid_login_attempt_id = LoginAttemptId::parse(SecretString::new(
+            "550e8400-e29b-41d4-a716-446655440000"
+                .to_owned()
+                .into_boxed_str(),
+        ))
+        .is_ok();
+        let err = TwoFACode::parse(SecretString::new("".to_owned().into_boxed_str())).unwrap_err();
+        assert!(err.to_string().contains("empty"));
 
-        assert!(is_valid_login_attempt_id && is_invalid_login_attempt_id)
+        assert!(is_valid_login_attempt_id)
     }
 
     #[test]
@@ -241,11 +314,12 @@ mod tests {
         ];
 
         for email in valid_emails {
-            let result = Email::parse(email);
+            let email_secret = SecretString::new(email.to_owned().into_boxed_str());
+            let result = Email::parse(email_secret);
             assert!(result.is_ok(), "Should parse valid email: {}", email);
 
             let parsed_email = result.unwrap();
-            assert_eq!(parsed_email.as_ref(), email);
+            assert_eq!(parsed_email.as_ref().expose_secret(), email);
         }
     }
 
@@ -262,7 +336,9 @@ mod tests {
         ];
 
         for (email, expected_error) in test_cases {
-            let result = Email::parse(email);
+            let email_secret = SecretString::new(email.to_owned().into_boxed_str());
+            let result = Email::parse(email_secret);
+
             assert!(result.is_err(), "Should reject invalid email: '{}'", email);
 
             let actual_error = result.unwrap_err();
@@ -276,22 +352,25 @@ mod tests {
 
     #[test]
     fn test_email_as_ref_implementation() {
-        let email = Email::parse("test@example.com").unwrap();
-        let email_str: &str = email.as_ref();
+        let email_secret = SecretString::new("test@example.com".to_owned().into_boxed_str());
+        let email_str: &str = email_secret.expose_secret();
         assert_eq!(email_str, "test@example.com");
-
-        fn takes_string_ref(s: impl AsRef<str>) -> String {
-            s.as_ref().to_uppercase()
-        }
-
-        assert_eq!(takes_string_ref(&email), "TEST@EXAMPLE.COM");
     }
 
     #[test]
     fn test_email_equality() {
-        let email1 = Email::parse("test@example.com").unwrap();
-        let email2 = Email::parse("test@example.com").unwrap();
-        let email3 = Email::parse("other@example.com").unwrap();
+        let email1 = Email::parse(SecretString::new(
+            "test@example.com".to_owned().into_boxed_str(),
+        ))
+        .unwrap();
+        let email2 = Email::parse(SecretString::new(
+            "test@example.com".to_owned().into_boxed_str(),
+        ))
+        .unwrap();
+        let email3 = Email::parse(SecretString::new(
+            "other@example.com".to_owned().into_boxed_str(),
+        ))
+        .unwrap();
 
         assert_eq!(email1, email2);
         assert_ne!(email1, email3);
@@ -299,9 +378,10 @@ mod tests {
 
     #[test]
     fn test_email_trimming() {
-        let email_with_spaces = "  test@example.com  ";
+        let email_with_spaces =
+            SecretString::new("   test@example.com   ".to_owned().into_boxed_str());
         let result = Email::parse(email_with_spaces).unwrap();
-        assert_eq!(result.as_ref(), "test@example.com");
+        assert_eq!(result.as_ref().expose_secret(), "test@example.com");
     }
 
     #[test]
@@ -326,7 +406,16 @@ mod tests {
     #[test]
     fn test_password_empty() {
         let result = Password::parse("");
-        assert_eq!(result.unwrap_err(), PasswordError::Empty);
+        assert!(result.is_err(), "Empty password should be rejected");
+
+        let report = result.unwrap_err();
+
+        // Downcast Report → PasswordError
+        let actual_error = report
+            .downcast_ref::<PasswordError>()
+            .expect("Error should be PasswordError");
+
+        assert_eq!(actual_error, &PasswordError::Empty);
     }
 
     #[test]
@@ -335,9 +424,22 @@ mod tests {
 
         for password in non_ascii_passwords {
             let result = Password::parse(password);
+            assert!(
+                result.is_err(),
+                "Should reject non-ASCII password: {}",
+                password
+            );
+
+            let report = result.unwrap_err();
+
+            // Downcast Report → PasswordError
+            let actual_error = report
+                .downcast_ref::<PasswordError>()
+                .expect("Error should be PasswordError");
+
             assert_eq!(
-                result.unwrap_err(),
-                PasswordError::IsNotASCII,
+                actual_error,
+                &PasswordError::IsNotASCII,
                 "Should reject non-ASCII password: {}",
                 password
             );
@@ -355,9 +457,20 @@ mod tests {
 
         for password in passwords_with_spaces {
             let result = Password::parse(password);
+            assert!(
+                result.is_err(),
+                "Should reject password with whitespace: {:?}",
+                password
+            );
+
+            let report = result.unwrap_err();
+            let actual_error = report
+                .downcast_ref::<PasswordError>()
+                .expect("Error should be PasswordError");
+
             assert_eq!(
-                result.unwrap_err(),
-                PasswordError::IncludesSpaces,
+                actual_error,
+                &PasswordError::IncludesSpaces,
                 "Should reject password with whitespace: {:?}",
                 password
             );
@@ -370,13 +483,36 @@ mod tests {
 
         for password in short_passwords {
             let result = Password::parse(password);
+            assert!(
+                result.is_err(),
+                "Should reject short password: {}",
+                password
+            );
+
+            let report = result.unwrap_err();
+            let actual_error = report
+                .downcast_ref::<PasswordError>()
+                .expect("Error should be PasswordError");
+
             assert_eq!(
-                result.unwrap_err(),
-                PasswordError::ShortLength,
+                actual_error,
+                &PasswordError::ShortLength,
                 "Should reject short password: {}",
                 password
             );
         }
+    }
+
+    fn assert_password_error(input: &str, expected: PasswordError) {
+        let result = Password::parse(input);
+        assert!(result.is_err(), "Expected error for password: {}", input);
+
+        let report = result.unwrap_err();
+        let actual = report
+            .downcast_ref::<PasswordError>()
+            .expect("Error should be PasswordError");
+
+        assert_eq!(actual, &expected, "Wrong error for password: {}", input);
     }
 
     #[test]
@@ -384,13 +520,7 @@ mod tests {
         let passwords = ["lowercase123!", "nouppercase1!", "password123@"];
 
         for password in passwords {
-            let result = Password::parse(password);
-            assert_eq!(
-                result.unwrap_err(),
-                PasswordError::MissingCapitalLetter,
-                "Should reject password without capital letter: {}",
-                password
-            );
+            assert_password_error(password, PasswordError::MissingCapitalLetter);
         }
     }
 
@@ -399,13 +529,7 @@ mod tests {
         let passwords = ["UPPERCASE123!", "NOLOWERCASE1!", "PASSWORD123@"];
 
         for password in passwords {
-            let result = Password::parse(password);
-            assert_eq!(
-                result.unwrap_err(),
-                PasswordError::MissingLowercaseLetter,
-                "Should reject password without lowercase letter: {}",
-                password
-            );
+            assert_password_error(password, PasswordError::MissingLowercaseLetter);
         }
     }
 
@@ -414,13 +538,7 @@ mod tests {
         let passwords = ["NoNumbers!", "Password!", "OnlyLetters@"];
 
         for password in passwords {
-            let result = Password::parse(password);
-            assert_eq!(
-                result.unwrap_err(),
-                PasswordError::MissingNumber,
-                "Should reject password without number: {}",
-                password
-            );
+            assert_password_error(password, PasswordError::MissingNumber);
         }
     }
 
@@ -429,13 +547,7 @@ mod tests {
         let passwords = ["NoSymbols123", "Password123", "OnlyAlphaNum1"];
 
         for password in passwords {
-            let result = Password::parse(password);
-            assert_eq!(
-                result.unwrap_err(),
-                PasswordError::MissingSymbol,
-                "Should reject password without symbol: {}",
-                password
-            );
+            assert_password_error(password, PasswordError::MissingSymbol);
         }
     }
 
@@ -461,31 +573,37 @@ mod tests {
 
     #[test]
     fn test_password_validation_order() {
-        assert_eq!(Password::parse("").unwrap_err(), PasswordError::Empty);
-        assert_eq!(Password::parse("ñ").unwrap_err(), PasswordError::IsNotASCII);
-        assert_eq!(
-            Password::parse("a b").unwrap_err(),
-            PasswordError::IncludesSpaces
-        );
-        assert_eq!(
-            Password::parse("Short1!").unwrap_err(),
-            PasswordError::ShortLength
-        );
+        fn assert_password_error(input: &str, expected: PasswordError) {
+            let result = Password::parse(input);
+            assert!(result.is_err(), "Expected error for password: {:?}", input);
+
+            let report = result.unwrap_err();
+            let actual = report
+                .downcast_ref::<PasswordError>()
+                .expect("Error should be PasswordError");
+
+            assert_eq!(actual, &expected, "Wrong error for password: {:?}", input);
+        }
+
+        assert_password_error("", PasswordError::Empty);
+        assert_password_error("ñ", PasswordError::IsNotASCII);
+        assert_password_error("a b", PasswordError::IncludesSpaces);
+        assert_password_error("Short1!", PasswordError::ShortLength);
     }
 
     #[quickcheck]
     fn prop_valid_emails_contain_at_symbol(email_str: String) -> bool {
-        match Email::parse(&email_str) {
-            Ok(email) => email.as_ref().contains('@'),
+        match Email::parse(SecretString::new(email_str.into_boxed_str())) {
+            Ok(email) => email.as_ref().expose_secret().contains('@'),
             Err(_) => true,
         }
     }
 
     #[quickcheck]
     fn prop_email_parse_as_ref_consistency(email_str: String) -> bool {
-        match Email::parse(&email_str) {
+        match Email::parse(SecretString::new(email_str.to_owned().into_boxed_str())) {
             Ok(email) => {
-                let back_to_str = email.as_ref();
+                let back_to_str = email.as_ref().expose_secret();
                 back_to_str == email_str.trim()
             }
             Err(_) => true,
@@ -529,10 +647,11 @@ mod tests {
 
         for _ in 0..10 {
             let fake_email: String = Faker.fake_with_rng(&mut rng);
+            let fake_email_secret = SecretString::new(fake_email.to_owned().into_boxed_str());
 
-            match Email::parse(&fake_email) {
+            match Email::parse(fake_email_secret) {
                 Ok(email) => {
-                    assert_eq!(email.as_ref(), fake_email.trim());
+                    assert_eq!(email.as_ref().expose_secret(), fake_email.trim());
                     assert!(fake_email.contains('@'));
                 }
                 Err(_) => {
@@ -544,8 +663,11 @@ mod tests {
 
     #[test]
     fn test_edge_cases() {
-        assert!(Email::parse("a@b.co").is_ok());
-        assert!(Email::parse("test+tag@example.com").is_ok());
+        assert!(Email::parse(SecretString::new("a@b.co".to_owned().into_boxed_str())).is_ok());
+        assert!(Email::parse(SecretString::new(
+            "test+tag@example.com".to_owned().into_boxed_str()
+        ))
+        .is_ok());
 
         assert!(Password::parse("Minimum1!").is_ok());
 
@@ -562,21 +684,20 @@ mod tests {
 
     #[tokio::test]
     async fn empty_string_is_rejected() {
-        let password = "".to_owned();
-
+        let password = SecretString::new("".to_string().into_boxed_str());
         assert!(HashedPassword::parse(password).await.is_err());
     }
 
     #[tokio::test]
     async fn string_less_than_8_characters_is_rejected() {
-        let password = "1234567".to_owned();
-        // updated!
+        let password = SecretString::new("1234567".to_owned().into_boxed_str());
         assert!(HashedPassword::parse(password).await.is_err());
     }
 
-    // new
     #[test]
     fn can_parse_valid_argon2_hash() {
+        use secrecy::ExposeSecret;
+
         // Arrange - Create a valid Argon2 hash
         let raw_password = "TestPassword123";
         let salt = SaltString::generate(&mut OsRng);
@@ -592,14 +713,19 @@ mod tests {
             .to_string();
 
         // Act
-        let hash_password = HashedPassword::parse_password_hash(hash_string.clone()).unwrap();
+        let hash_password = HashedPassword::parse_password_hash(SecretString::new(
+            hash_string.clone().into_boxed_str(),
+        ))
+        .unwrap();
 
-        // Assert
-        assert_eq!(hash_password.as_ref(), hash_string.as_str());
-        assert!(hash_password.as_ref().starts_with("$argon2id$v=19$"));
+        // ✅ Assert (expose in test only)
+        assert_eq!(hash_password.as_ref().expose_secret(), hash_string.as_str());
+        assert!(hash_password
+            .as_ref()
+            .expose_secret()
+            .starts_with("$argon2id$v=19$"));
     }
 
-    // new
     #[tokio::test]
     async fn can_verify_raw_password() {
         let raw_password = "TestPassword123";
@@ -615,18 +741,15 @@ mod tests {
             .unwrap()
             .to_string();
 
-        let hash_password = HashedPassword::parse_password_hash(hash_string.clone()).unwrap();
+        let hash_password = HashedPassword::parse_password_hash(SecretString::new(
+            hash_string.clone().into_boxed_str(),
+        ))
+        .unwrap();
 
-        assert_eq!(hash_password.as_ref(), hash_string.as_str());
-        assert!(hash_password.as_ref().starts_with("$argon2id$v=19$"));
+        // ✅ Fix #2: construct candidate properly + pass by reference
+        let candidate = SecretString::new(raw_password.to_owned().into_boxed_str());
 
-        assert_eq!(
-            hash_password
-                .verify_raw_password(raw_password)
-                .await
-                .unwrap(),
-            ()
-        );
+        hash_password.verify_raw_password(&candidate).await.unwrap();
     }
 
     #[derive(Debug, Clone)]
@@ -685,6 +808,7 @@ mod tests {
     #[tokio::test]
     #[quickcheck_macros::quickcheck]
     async fn valid_passwords_are_parsed_successfully(valid_password: ValidPasswordFixture) -> bool {
-        HashedPassword::parse(valid_password.0).await.is_ok() // updated!
+        let password = secrecy::SecretString::new(valid_password.0.into_boxed_str());
+        HashedPassword::parse(password).await.is_ok()
     }
 }

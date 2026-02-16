@@ -1,29 +1,39 @@
 use crate::app_state::AppState;
+use crate::domain::error::TwoFACodeStoreError;
 use crate::domain::types::{Email, LoginAttemptId, TwoFACode};
 use crate::domain::TwoFACodeStore;
 use crate::routes::helpers::update_cookie_jar;
 use crate::AuthAPIError;
 use axum::{extract::State, http::StatusCode, Json};
 use axum_extra::extract::CookieJar;
+use color_eyre::eyre::Report;
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 
+#[tracing::instrument(skip_all)]
 pub async fn verify_2fa(
     State(state): State<AppState>,
     jar: CookieJar,
     Json(request): Json<Verify2FARequest>,
 ) -> Result<(CookieJar, (StatusCode, Json<Verify2FAResponse>)), AuthAPIError> {
     let email = Email::parse(request.email).map_err(|_| AuthAPIError::InvalidCredentials)?;
-    let login_attempt_id = LoginAttemptId::parse(request.login_attempt_id)
+    let login_attempt_id = LoginAttemptId::parse(SecretString::new(
+        request.login_attempt_id.to_owned().into_boxed_str(),
+    ))
+    .map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let two_fa_code = TwoFACode::parse(SecretString::new(request.two_fa_code.into_boxed_str()))
         .map_err(|_| AuthAPIError::InvalidCredentials)?;
-    let two_fa_code =
-        TwoFACode::parse(request.two_fa_code).map_err(|_| AuthAPIError::InvalidCredentials)?;
 
     let mut two_fa_code_store = state.two_fa_code_store.write().await;
 
     let (stored_login_attempt_id, stored_two_fa_code) = two_fa_code_store
         .get_two_fa_code(&email)
         .await
-        .map_err(|_| AuthAPIError::MissingToken)?;
+        .map_err(|e| match e {
+            TwoFACodeStoreError::LoginAttemptIdNotFound => AuthAPIError::InvalidToken, // or MissingToken
+            TwoFACodeStoreError::UnexpectedError(r) => AuthAPIError::UnexpectedError(r), // already a Report
+            _ => AuthAPIError::UnexpectedError(Report::msg(e.to_string())),
+        })?;
 
     if stored_two_fa_code != two_fa_code || stored_login_attempt_id != login_attempt_id {
         return Err(AuthAPIError::InvalidToken);
@@ -31,10 +41,14 @@ pub async fn verify_2fa(
 
     let updated_jar = update_cookie_jar(jar, &email)?;
 
-    two_fa_code_store
-        .remove_two_fa_code(&email)
-        .await
-        .map_err(|_| AuthAPIError::InvalidToken)?;
+    match two_fa_code_store.remove_two_fa_code(&email).await {
+        Ok(()) => {}
+        Err(TwoFACodeStoreError::LoginAttemptIdNotFound) => {}
+        Err(TwoFACodeStoreError::UnexpectedError(r)) => {
+            return Err(AuthAPIError::UnexpectedError(r))
+        }
+        Err(e) => return Err(AuthAPIError::UnexpectedError(Report::msg(e.to_string()))),
+    }
 
     let response = Json(Verify2FAResponse {
         message: "Token verified successfully".to_string(),
@@ -45,7 +59,7 @@ pub async fn verify_2fa(
 
 #[derive(Deserialize)]
 pub struct Verify2FARequest {
-    pub email: String,
+    pub email: SecretString,
     #[serde(rename = "loginAttemptId")]
     pub login_attempt_id: String,
     #[serde(rename = "2FACode")]

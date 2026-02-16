@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use redis::{Commands, Connection};
-use tokio::sync::RwLock;
-
 use crate::domain::data_store::BannedTokenStore;
 use crate::domain::error::BannedTokenStoreError;
 use crate::utils::auth::TOKEN_TTL_SECONDS;
+use color_eyre::eyre::Report;
+use redis::{Commands, Connection};
+use secrecy::{ExposeSecret, SecretString};
+use tokio::sync::RwLock;
 
 pub struct RedisBannedTokenStore {
     conn: Arc<RwLock<Connection>>,
@@ -19,30 +20,31 @@ impl RedisBannedTokenStore {
 
 #[async_trait::async_trait]
 impl BannedTokenStore for RedisBannedTokenStore {
-    async fn add_token(&mut self, token: String) -> Result<(), BannedTokenStoreError> {
+    #[tracing::instrument(skip_all)]
+    async fn add_token(&mut self, token: SecretString) -> Result<(), BannedTokenStoreError> {
         let ttl: u64 = TOKEN_TTL_SECONDS
             .try_into()
-            .map_err(|_| BannedTokenStoreError::UnexpectedError)?;
+            .map_err(|e| BannedTokenStoreError::UnexpectedError(Report::new(e)))?;
 
-        let key = get_key(&token);
+        let key = get_key(token.expose_secret());
 
         let mut connection = self.conn.write().await;
 
         connection
             .set_ex::<_, _, ()>(key, true, ttl)
-            .map_err(|_| BannedTokenStoreError::UnexpectedError)?;
-
+            .map_err(|e| BannedTokenStoreError::UnexpectedError(Report::new(e)))?;
         Ok(())
     }
 
-    async fn token_exists(&self, token: &str) -> Result<bool, BannedTokenStoreError> {
-        let key = get_key(token);
+    #[tracing::instrument(skip_all)]
+    async fn token_exists(&self, token: &SecretString) -> Result<bool, BannedTokenStoreError> {
+        let key = get_key(token.expose_secret());
 
         let mut connection = self.conn.write().await;
 
         let exists: bool = connection
             .exists(key)
-            .map_err(|_| BannedTokenStoreError::UnexpectedError)?;
+            .map_err(|e| BannedTokenStoreError::UnexpectedError(Report::new(e)))?;
 
         Ok(exists)
     }
