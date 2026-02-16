@@ -5,6 +5,7 @@ use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::Utc;
 use color_eyre::eyre::{eyre, Report, Result, WrapErr};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Validation};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -54,7 +55,7 @@ fn generate_auth_token(email: &Email) -> Result<String> {
         .try_into()
         .map_err(|e| Report::msg(format!("JWT exp timestamp cannot fit into usize: {e}")))?;
 
-    let sub = email.as_ref().to_owned();
+    let sub = email.as_ref().expose_secret().to_owned();
 
     let claims = Claims { sub, exp };
 
@@ -130,7 +131,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_auth_cookie() {
-        let email = Email::parse("test@example.com").unwrap();
+        let email = Email::parse(SecretString::new(
+            "test@example.com".to_owned().into_boxed_str(),
+        ))
+        .unwrap();
         let cookie = generate_auth_cookie(&email).unwrap();
         assert_eq!(cookie.name(), JWT_COOKIE_NAME);
         assert_eq!(cookie.value().split('.').count(), 3);
@@ -152,14 +156,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_auth_token() {
-        let email = Email::parse("test@example.com").unwrap();
+        let email = Email::parse(SecretString::new(
+            "test@example.com".to_owned().into_boxed_str(),
+        ))
+        .unwrap();
         let result = generate_auth_token(&email).unwrap();
         assert_eq!(result.split('.').count(), 3);
     }
 
     #[tokio::test]
     async fn test_validate_token_with_valid_token() {
-        let email = Email::parse("test@example.com").unwrap();
+        let email = Email::parse(SecretString::new(
+            "test@example.com".to_owned().into_boxed_str(),
+        ))
+        .unwrap();
         let token = generate_auth_token(&email).unwrap();
         let redis_conn = Arc::new(RwLock::new(configure_redis()));
         let result = validate_token(

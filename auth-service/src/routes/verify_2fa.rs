@@ -7,6 +7,7 @@ use crate::AuthAPIError;
 use axum::{extract::State, http::StatusCode, Json};
 use axum_extra::extract::CookieJar;
 use color_eyre::eyre::Report;
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 
 #[tracing::instrument(skip_all)]
@@ -56,7 +57,7 @@ pub async fn verify_2fa(
 
 #[derive(Deserialize)]
 pub struct Verify2FARequest {
-    pub email: String,
+    pub email: SecretString,
     #[serde(rename = "loginAttemptId")]
     pub login_attempt_id: String,
     #[serde(rename = "2FACode")]

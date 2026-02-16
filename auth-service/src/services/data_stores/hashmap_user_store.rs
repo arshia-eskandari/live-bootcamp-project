@@ -65,14 +65,22 @@ mod tests {
 
         store
             .add_user(User::new(
-                Email::parse("test@example.com").unwrap(),
+                Email::parse(SecretString::new(
+                    "test@example.com".to_owned().into_boxed_str(),
+                ))
+                .unwrap(),
                 HashedPassword::parse(password).await.unwrap(),
                 false,
             ))
             .await?;
 
         let user = store
-            .get_user(&Email::parse("test@example.com").unwrap())
+            .get_user(
+                &Email::parse(SecretString::new(
+                    "test@example.com".to_owned().into_boxed_str(),
+                ))
+                .unwrap(),
+            )
             .await?;
 
         Ok((store, user))
@@ -85,7 +93,13 @@ mod tests {
         let password = SecretString::new("123DSDFdasd@@456789".to_owned().into_boxed_str());
 
         store
-            .validate_user(Email::parse("test@example.com").unwrap(), &password)
+            .validate_user(
+                Email::parse(SecretString::new(
+                    "test@example.com".to_owned().into_boxed_str(),
+                ))
+                .unwrap(),
+                &password,
+            )
             .await?;
 
         assert!(!store_user.requires_2fa);
@@ -106,7 +120,13 @@ mod tests {
         let password = SecretString::new("123DSDFdasd@@456789".to_owned().into_boxed_str());
 
         store
-            .validate_user(Email::parse("test@example.com").unwrap(), &password)
+            .validate_user(
+                Email::parse(SecretString::new(
+                    "test@example.com".to_owned().into_boxed_str(),
+                ))
+                .unwrap(),
+                &password,
+            )
             .await?;
 
         Ok(())

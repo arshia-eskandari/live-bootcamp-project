@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::domain::data_store::TwoFACodeStore;
 use crate::domain::error::TwoFACodeStoreError;
 use crate::domain::types::{Email, LoginAttemptId, TwoFACode};
+use secrecy::SecretString;
 
 pub struct HashmapTwoFACodeStore {
     codes: HashMap<Email, (LoginAttemptId, TwoFACode)>,
@@ -68,7 +69,10 @@ mod tests {
     ) -> Result<(HashmapTwoFACodeStore, Email), TwoFACodeStoreError> {
         let mut store = HashmapTwoFACodeStore::default();
 
-        let email = Email::parse("test@example.com").unwrap();
+        let email = Email::parse(SecretString::new(
+            "test@example.com".to_owned().into_boxed_str(),
+        ))
+        .unwrap();
         let login_attempt_id = LoginAttemptId::parse(Uuid::new_v4().to_string()).unwrap();
         let two_fa_code = TwoFACode::parse("123456").unwrap();
 
@@ -119,7 +123,10 @@ mod tests {
     ) -> Result<(), TwoFACodeStoreError> {
         let mut store = HashmapTwoFACodeStore::default();
 
-        let email = Email::parse("missing@example.com").unwrap();
+        let email = Email::parse(SecretString::new(
+            "missing@example.com".to_owned().into_boxed_str(),
+        ))
+        .unwrap();
 
         let err = store.remove_two_fa_code(&email).await.unwrap_err();
         assert!(matches!(err, TwoFACodeStoreError::EmailNotFound));

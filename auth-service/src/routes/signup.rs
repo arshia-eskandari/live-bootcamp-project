@@ -1,6 +1,6 @@
 use crate::domain::{Email, HashedPassword};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 
 use crate::{app_state::AppState, domain::User, domain::UserStore, AuthAPIError};
@@ -10,8 +10,7 @@ pub async fn signup(
     State(state): State<AppState>,
     Json(request): Json<SignupRequest>,
 ) -> Result<impl IntoResponse, AuthAPIError> {
-    let email = Email::parse(request.email.expose_secret())
-        .map_err(|_| AuthAPIError::InvalidCredentials)?;
+    let email = Email::parse(request.email).map_err(|_| AuthAPIError::InvalidCredentials)?;
     let password = HashedPassword::parse(request.password)
         .await
         .map_err(|_| AuthAPIError::InvalidCredentials)?;
